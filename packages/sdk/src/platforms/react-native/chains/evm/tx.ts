@@ -8,8 +8,8 @@
  * to the SDK bundle — consumers that already install viem share the module.
  *
  * All 13 EVM chains declared in `@vultisig/core-chain/Chain` are supported:
- *   Ethereum, Avalanche, BSC, Polygon, Arbitrum, Optimism, Base, Blast,
- *   Zksync, Mantle, Hyperliquid, Sei, CronosChain.
+ *   Ethereum, Avalanche, BSC, Polygon, Arbitrum, Optimism, Base, Zksync,
+ *   Mantle, Robinhood, Hyperliquid, Sei, CronosChain.
  *
  * The surface mirrors the Cosmos RN bridge:
  *   - `buildEvmSendTx(opts)`        → native-token send

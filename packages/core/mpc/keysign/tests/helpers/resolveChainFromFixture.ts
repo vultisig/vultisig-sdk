@@ -8,7 +8,6 @@ const aliases: Record<string, Chain> = {
   polygon: Chain.Polygon,
   base: Chain.Base,
   avalanche: Chain.Avalanche,
-  blast: Chain.Blast,
   cronoschain: Chain.CronosChain,
   zksync: Chain.Zksync,
   mantle: Chain.Mantle,

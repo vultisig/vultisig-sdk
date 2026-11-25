@@ -155,7 +155,7 @@ describe('balance/fiat batching benchmark (call-count A/B)', () => {
       Chain.Polygon,
       Chain.Avalanche,
       Chain.BSC,
-      Chain.Blast,
+      Chain.Mantle,
       Chain.CronosChain,
       Chain.Zksync,
       Chain.Bitcoin,

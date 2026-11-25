@@ -657,45 +657,6 @@ const leanTokens: Partial<LeanChainTokensRecord> = {
       decimals: 18,
     },
   },
-  [Chain.Blast]: {
-    '0x4300000000000000000000000000000000000004': {
-      ticker: 'WETH',
-      logo: 'weth',
-      decimals: 18,
-      priceProviderId: 'ethereum',
-    },
-    '0xF7bc58b8D8f97ADC129cfC4c9f45Ce3C0E1D2692': {
-      ticker: 'WBTC',
-      logo: 'wbtc',
-      decimals: 8,
-    },
-    '0x4300000000000000000000000000000000000003': {
-      ticker: 'USDB',
-      logo: 'usdb',
-      decimals: 18,
-      priceProviderId: 'usdb',
-    },
-    '0xb1a5700fA2358173Fe465e6eA4Ff52E36e88E2ad': {
-      ticker: 'BLAST',
-      logo: 'blast',
-      decimals: 18,
-    },
-    '0x76DA31D7C9CbEAE102aff34D3398bC450c8374c1': {
-      ticker: 'MIM',
-      logo: 'mim',
-      decimals: 18,
-    },
-    '0x9e20461bc2c4c980f62f1B279D71734207a6A356': {
-      ticker: 'OMNI',
-      logo: 'omni',
-      decimals: 18,
-    },
-    '0x47C337Bd5b9344a6F3D6f58C474D9D8cd419D8cA': {
-      ticker: 'DACKIE',
-      logo: 'dackie',
-      decimals: 18,
-    },
-  },
   [Chain.Zksync]: {
     '0x1d17CBcF0D6D143135aE902365D2E5e2A16538D4': {
       ticker: 'USDC',

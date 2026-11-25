@@ -4,7 +4,6 @@ export const blockaidEvmChain = {
   [EvmChain.Arbitrum]: 'arbitrum',
   [EvmChain.Avalanche]: 'avalanche',
   [EvmChain.Base]: 'base',
-  [EvmChain.Blast]: 'blast',
   [EvmChain.BSC]: 'bsc',
   [EvmChain.Ethereum]: 'ethereum',
   [EvmChain.Hyperliquid]: 'hyperevm',

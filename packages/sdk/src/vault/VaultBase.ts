@@ -101,6 +101,7 @@ import { TransactionBuilder } from './services/TransactionBuilder'
 import type { SwapPrepareResult, SwapQuoteBase, SwapQuoteParams, SwapQuoteResult, SwapTxParams } from './swap-types'
 import { type ResolvedTokenInfo, resolveTokenRef, resolveTokenRefId } from './tokenRef'
 import { canonicalizeVaultData } from './utils/canonicalizeVaultData'
+import { toSupportedChains } from './utils/toSupportedChains'
 import { VaultConflictError, VaultError, VaultErrorCode } from './VaultError'
 import { VaultConfig } from './VaultServices'
 
@@ -205,20 +206,6 @@ async function withStorageWriteLock<T>(storage: Storage, key: string, operation:
 
   return result
 }
-
-const supportedChains = new Set<string>(Object.values(Chain))
-
-/**
- * Narrows persisted `VaultData.chains` (an unvalidated `string[]`) to chains this
- * build still supports, dropping any the SDK has since removed.
- *
- * Without this, a chain retired from {@link Chain} survives in storage and is cast
- * straight back into `_userChains`, where every registry lookup keyed on it
- * (`chainFeeCoin`, `cosmosRpcUrl`, `chainRegistry`, …) yields `undefined` and
- * throws at the point of use rather than being ignored here.
- */
-const toSupportedChains = (chains: readonly string[]): Chain[] =>
-  chains.filter((chain): chain is Chain => supportedChains.has(chain))
 
 /**
  * VaultBase - Abstract base class for all vault types

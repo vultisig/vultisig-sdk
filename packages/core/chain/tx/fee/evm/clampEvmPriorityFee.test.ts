@@ -11,7 +11,6 @@ describe('clampEvmPriorityFee', () => {
     ['Polygon', EvmChain.Polygon, gwei(400)], // congestion spike
     ['Base', EvmChain.Base, gwei(1)],
     ['Optimism', EvmChain.Optimism, gwei(1)],
-    ['Blast', EvmChain.Blast, gwei(1)],
     ['Zksync', EvmChain.Zksync, gwei(1)],
     ['Avalanche', EvmChain.Avalanche, gwei(25)],
     ['BSC', EvmChain.BSC, gwei(3)],
@@ -82,7 +81,6 @@ describe('clampEvmPriorityFee', () => {
   it.each([
     ['Base', EvmChain.Base],
     ['Optimism', EvmChain.Optimism],
-    ['Blast', EvmChain.Blast],
   ])('floors a zero %s tip to a nominal 20 wei', (_label, chain) => {
     expect(clampEvmPriorityFee(chain, 0n)).toBe(20n)
     expect(clampEvmPriorityFee(chain, 21n)).toBe(21n)

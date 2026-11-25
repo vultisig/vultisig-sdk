@@ -1,10 +1,10 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 
-// Zksync and Blast are intentionally absent (sdk#1151): Kyber's
-// aggregator-api.kyberswap.com /routes endpoint 404s on both (verified
-// 2026-07-08, see knownAggregatorRouters.ts) — listing them only burned a
-// doomed fetch + timeout slot per quote on those chains. Re-add if Kyber's
-// API starts serving them.
+// Zksync is intentionally absent (sdk#1151): Kyber's
+// aggregator-api.kyberswap.com /routes endpoint 404s on it (verified
+// 2026-07-08, see knownAggregatorRouters.ts) — listing it only burned a
+// doomed fetch + timeout slot per quote on that chain. Re-add if Kyber's
+// API starts serving it.
 export const kyberSwapEnabledChains = [
   Chain.Ethereum,
   Chain.BSC,

@@ -1430,7 +1430,7 @@ All chains supported through Core's functional resolvers. The SDK has no chain-s
 
 | Category   | Chains                                                                                  |
 | ---------- | --------------------------------------------------------------------------------------- |
-| **EVM**    | Ethereum, Polygon, Arbitrum, Optimism, BSC, Avalanche, Base, Blast, Zksync, Cronos, Mantle, Sei, Hyperliquid |
+| **EVM**    | Ethereum, Polygon, Arbitrum, Optimism, BSC, Avalanche, Base, Zksync, Cronos, Mantle, Sei, Hyperliquid |
 | **UTXO**   | Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash                                  |
 | **Cosmos** | Cosmos, THORChain, MayaChain, Osmosis, Dydx, Kujira, Terra, TerraClassic, Noble, Akash  |
 | **Other**  | Solana, Sui, Polkadot, Ton, Ripple, Tron, Cardano                                       |

@@ -9,12 +9,12 @@ import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
  * transaction executes.
  *
  * Membership is asserted, not detected: the predeploy answers on exactly these
- * four and has no code on every other EVM chain in the registry. An omission is
+ * three and has no code on every other EVM chain in the registry. An omission is
  * safe but silent — the chain reserves nothing extra, which is how every chain
  * behaved before the oracle was read at all — so a newly added OP-stack rollup
  * has to be listed here or its max sends will under-reserve.
  */
-export const opStackChains = [EvmChain.Optimism, EvmChain.Base, EvmChain.Blast, EvmChain.Mantle] as const
+export const opStackChains = [EvmChain.Optimism, EvmChain.Base, EvmChain.Mantle] as const
 
 export type OpStackChain = (typeof opStackChains)[number]
 

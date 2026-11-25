@@ -37,12 +37,11 @@ describe('swapEnabledChains aggregate (sdk#1151)', () => {
 })
 
 describe('kyberSwapEnabledChains (sdk#1151)', () => {
-  it('does not list Zksync/Blast — Kyber /routes 404s on both (verified 2026-07-08)', () => {
+  it('does not list Zksync — Kyber /routes 404s there (verified 2026-07-08)', () => {
     // Listing them only burned a doomed fetch + a 30s-capped timeout slot on
     // every quote for those chains; see knownAggregatorRouters.ts.
     const chains = new Set<Chain>(kyberSwapEnabledChains)
     expect(chains.has(Chain.Zksync)).toBe(false)
-    expect(chains.has(Chain.Blast)).toBe(false)
   })
 
   it('keeps the 8 verified-live chains', () => {

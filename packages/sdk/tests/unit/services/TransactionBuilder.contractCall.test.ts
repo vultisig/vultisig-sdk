@@ -54,7 +54,6 @@ vi.mock('@vultisig/core-chain/coin/chainFeeCoin', () => ({
     Arbitrum: { ticker: 'ETH', decimals: 18, logo: 'eth' },
     Optimism: { ticker: 'ETH', decimals: 18, logo: 'eth' },
     Base: { ticker: 'ETH', decimals: 18, logo: 'eth' },
-    Blast: { ticker: 'ETH', decimals: 18, logo: 'eth' },
     CronosChain: { ticker: 'CRO', decimals: 18, logo: 'cro' },
     Zksync: { ticker: 'ETH', decimals: 18, logo: 'eth' },
     Mantle: { ticker: 'MNT', decimals: 18, logo: 'mnt' },
@@ -238,7 +237,7 @@ describe('TransactionBuilder.prepareContractCallTx', () => {
       Chain.Arbitrum,
       Chain.Optimism,
       Chain.Base,
-      Chain.Blast,
+      Chain.Mantle,
     ]
 
     for (const chain of evmChains) {

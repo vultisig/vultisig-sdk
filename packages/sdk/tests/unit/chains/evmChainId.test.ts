@@ -19,7 +19,6 @@ const CANONICAL_EVM_CHAIN_IDS = {
   [Chain.Arbitrum]: 42161,
   [Chain.Optimism]: 10,
   [Chain.Base]: 8453,
-  [Chain.Blast]: 81457,
   [Chain.Mantle]: 5000,
   [Chain.Zksync]: 324,
   [Chain.CronosChain]: 25,

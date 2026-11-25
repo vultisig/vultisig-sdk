@@ -181,7 +181,7 @@ The SDK supports two types of vaults:
 
 The SDK supports 36 blockchains across multiple ecosystems:
 
-- **EVM (13)**: Ethereum, Polygon, BSC, Arbitrum, Optimism, Base, Avalanche, Blast, Cronos, ZkSync, Hyperliquid, Mantle, Sei
+- **EVM (13)**: Ethereum, Polygon, BSC, Arbitrum, Optimism, Base, Avalanche, Cronos, ZkSync, Hyperliquid, Mantle, Sei, Robinhood
 - **UTXO (6)**: Bitcoin, Litecoin, Dogecoin, Bitcoin Cash, Dash, Zcash
 - **Cosmos (10)**: Cosmos Hub, THORChain, MayaChain, Osmosis, Dydx, Kujira, Terra, Terra Classic, Noble, Akash
 - **Other (7)**: Solana, Polkadot, Sui, TON, Ripple, Tron, Cardano
@@ -2924,7 +2924,6 @@ enum Chain {
   Optimism = 'Optimism',
   Base = 'Base',
   Avalanche = 'Avalanche',
-  Blast = 'Blast',
   CronosChain = 'CronosChain',
   ZkSync = 'ZkSync',
   Hyperliquid = 'Hyperliquid',

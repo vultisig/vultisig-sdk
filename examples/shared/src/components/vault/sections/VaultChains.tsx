@@ -218,7 +218,6 @@ function getChainInfo(chain: string): { type: string; color: string } {
     'Arbitrum',
     'Optimism',
     'Base',
-    'Blast',
     'Zksync',
     'CronosChain',
     'Mantle',

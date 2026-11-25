@@ -114,7 +114,6 @@ describe('assertKnownAggregatorRouter — AGG-02 fund-safety allowlist', () => {
       Chain.Arbitrum,
       Chain.Avalanche,
       Chain.Base,
-      Chain.Blast,
       Chain.BSC,
       Chain.CronosChain,
       Chain.Ethereum,
@@ -193,12 +192,12 @@ describe('assertKnownAggregatorRouter — AGG-02 fund-safety allowlist', () => {
     // chain-agnostically let a tampered payload relabelled 'cowswap' on an unsupported chain pass
     // both this guard AND the approval-spender bind, so the co-signer would sign an ERC-20 approve
     // to an address with no code (verified live 2026-07-21: eth_getCode is `0x` on CronosChain /
-    // Zksync / Blast) that anyone can later claim via the public deterministic deployment proxy.
+    // Zksync) that anyone can later claim via the public deterministic deployment proxy.
     it.each(cowSwapSupportedChains)('accepts the relayer on the supported chain %s', chain => {
       expect(() => assertKnownAggregatorRouter('cowswap', COW_VAULT_RELAYER_ADDRESS, chain)).not.toThrow()
     })
 
-    it.each([Chain.CronosChain, Chain.Zksync, Chain.Blast, Chain.Polygon, Chain.BSC, Chain.Sei, Chain.Hyperliquid])(
+    it.each([Chain.CronosChain, Chain.Zksync, Chain.Polygon, Chain.BSC, Chain.Sei, Chain.Hyperliquid])(
       'REJECTS the relayer on %s — CowSwap is not deployed there, so an approve to it is unbacked',
       chain => {
         expect(() => assertKnownAggregatorRouter('cowswap', COW_VAULT_RELAYER_ADDRESS, chain)).toThrow(
@@ -306,7 +305,7 @@ describe('SwapKit EVM source chains are fully covered by Blockaid — sdk#1458 r
     // assertSwapKitAddressReputation throws "cannot be verified on unsupported Blockaid chain"
     // for any EVM chain missing from blockaidEvmChain. Source eligibility comes from two places:
     // the static swapKitSourceChains list, and the blockaidEvmChain map itself for catalog-driven
-    // EVM chains such as Blast and Robinhood (see isSwapKitSourceChain). Adding an EVM chain to
+    // EVM chains such as Mantle and Robinhood (see isSwapKitSourceChain). Adding an EVM chain to
     // the static list without a Blockaid mapping (CronosChain today) would look like a harmless
     // one-line change and would silently make every SwapKit swap FROM that chain a 100%,
     // outage-independent refusal (not a Blockaid outage, not a flaky network call — a guaranteed

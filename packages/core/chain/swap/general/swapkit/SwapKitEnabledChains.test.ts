@@ -13,8 +13,8 @@ describe('SwapKit chain eligibility', () => {
   })
 
   it('opens catalog-driven EVM sources only when Blockaid already covers them', () => {
-    expect(swapKitSourceChains).not.toContain(Chain.Blast)
-    expect(isSwapKitSourceChain(Chain.Blast)).toBe(true)
+    expect(swapKitSourceChains).not.toContain(Chain.Mantle)
+    expect(isSwapKitSourceChain(Chain.Mantle)).toBe(true)
     expect(isSwapKitSourceChain(Chain.CronosChain)).toBe(false)
   })
 })

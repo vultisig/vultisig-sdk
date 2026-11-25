@@ -9,7 +9,6 @@ describe('getEvmTransferGasLimit', () => {
   it.each([
     ['Ethereum', EvmChain.Ethereum, 23_000n],
     ['Base', EvmChain.Base, 50_000n],
-    ['Blast', EvmChain.Blast, 200_000n],
     ['Mantle', EvmChain.Mantle, 23_000n],
     ['Zksync', EvmChain.Zksync, 200_000n],
   ])('floors a %s fee-coin transfer', (_label, chain, expected) => {
@@ -19,8 +18,8 @@ describe('getEvmTransferGasLimit', () => {
   it.each([
     ['Ethereum', EvmChain.Ethereum, 120_000n],
     ['Base', EvmChain.Base, 150_000n],
-    ['Blast', EvmChain.Blast, 200_000n],
     ['Mantle', EvmChain.Mantle, 120_000n],
+    ['Zksync', EvmChain.Zksync, 200_000n],
   ])('floors a %s token transfer', (_label, chain, expected) => {
     expect(getEvmTransferGasLimit({ chain, id: token })).toBe(expected)
   })

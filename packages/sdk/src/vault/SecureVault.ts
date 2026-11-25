@@ -24,6 +24,7 @@ import { normalizeToHex } from '../utils/bytes'
 import { computeNotificationVaultId } from '../utils/computeNotificationVaultId'
 import { createVaultBackup } from '../utils/export'
 import { canonicalizeVaultData } from './utils/canonicalizeVaultData'
+import { toSupportedChains } from './utils/toSupportedChains'
 import { VaultBase } from './VaultBase'
 import { VaultError, VaultErrorCode } from './VaultError'
 
@@ -555,7 +556,7 @@ export class SecureVault extends VaultBase {
 
     // Override constructor defaults with stored preferences from VaultData
     if (vaultData.chains && vaultData.chains.length > 0) {
-      ;(vault as any)._userChains = vaultData.chains.map((c: string) => c as any)
+      ;(vault as any)._userChains = toSupportedChains(vaultData.chains)
     }
     if (vaultData.currency) {
       ;(vault as any)._currency = vaultData.currency

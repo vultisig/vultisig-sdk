@@ -16,7 +16,6 @@ export const swapKitTrackerChainIds = {
   [Chain.BSC]: '56',
   [Chain.Polygon]: '137',
   [Chain.Optimism]: '10',
-  [Chain.Blast]: '81457',
   [Chain.Zksync]: '324',
   [Chain.Hyperliquid]: '999',
   [Chain.Robinhood]: '4663',

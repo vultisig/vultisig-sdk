@@ -10,7 +10,8 @@ import { VaultBase } from '../../../src/vault/VaultBase'
  * `_userChains` that every registry lookup (`chainFeeCoin`, `cosmosRpcUrl`,
  * `chainRegistry`, …) resolves to `undefined`, throwing at the point of use.
  *
- * Kujira is the concrete case: removed once its network went permanently offline.
+ * Kujira and Blast are the concrete cases: each was removed once its network
+ * went permanently offline.
  */
 describe('VaultBase persisted-chain restore', () => {
   const syncFrom = (chains: string[]) => {
@@ -29,6 +30,10 @@ describe('VaultBase persisted-chain restore', () => {
 
   it('drops a persisted chain the SDK no longer supports', () => {
     expect(syncFrom([Chain.Bitcoin, 'Kujira', Chain.Ethereum])).toEqual([Chain.Bitcoin, Chain.Ethereum])
+  })
+
+  it('drops a persisted Blast chain', () => {
+    expect(syncFrom([Chain.Ethereum, 'Blast', Chain.Base])).toEqual([Chain.Ethereum, Chain.Base])
   })
 
   it('keeps every still-supported chain', () => {

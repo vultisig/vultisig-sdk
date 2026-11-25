@@ -372,7 +372,7 @@ describe('findSwapQuote parallel selection', () => {
     [Chain.Hyperliquid, Chain.Ethereum],
     [Chain.Ethereum, Chain.Robinhood],
     [Chain.Robinhood, Chain.Ethereum],
-    [Chain.Ethereum, Chain.Blast],
+    [Chain.Ethereum, Chain.Mantle],
   ] as const)('dispatches SwapKit for a catalog-resolved %s -> %s corridor', async (fromChain, toChain) => {
     vi.mocked(getKyberSwapQuote).mockRejectedValue(new Error('skip kyber'))
     vi.mocked(getOneInchSwapQuote).mockRejectedValue(new Error('skip inch'))
@@ -434,10 +434,10 @@ describe('findSwapQuote parallel selection', () => {
 
     const quote = await findSwapQuote({
       from: {
-        chain: Chain.Blast,
+        chain: Chain.Mantle,
         address: '0xsender',
         decimals: 18,
-        ticker: 'ETH',
+        ticker: 'MNT',
       },
       to: {
         chain: Chain.Ethereum,

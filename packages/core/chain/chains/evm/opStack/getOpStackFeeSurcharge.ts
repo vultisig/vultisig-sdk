@@ -10,8 +10,8 @@ import { OpStackChain } from './opStackChains'
 const gasPriceOracleAddress = '0x420000000000000000000000000000000000000F'
 
 // `getL1Fee(bytes)` is preferred over the purpose-built `getL1FeeUpperBound(uint256)`,
-// which only exists from Fjord onwards — Blast's oracle predates it, while
-// `getL1Fee` has been there since Bedrock. `getOperatorFee(uint256)` arrives with
+// which only exists from Fjord onwards, while `getL1Fee` has been there since
+// Bedrock. `getOperatorFee(uint256)` arrives with
 // Isthmus and simply reverts on older oracles, which reads the same as "this chain
 // charges no operator fee".
 const gasPriceOracleAbi = [

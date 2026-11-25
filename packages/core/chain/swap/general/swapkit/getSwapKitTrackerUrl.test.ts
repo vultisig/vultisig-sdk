@@ -12,7 +12,6 @@ describe('getSwapKitTrackerUrl', () => {
     [Chain.BSC, '56'],
     [Chain.Polygon, '137'],
     [Chain.Optimism, '10'],
-    [Chain.Blast, '81457'],
     [Chain.Zksync, '324'],
     [Chain.Hyperliquid, '999'],
     [Chain.Robinhood, '4663'],
@@ -39,7 +38,7 @@ describe('getSwapKitTrackerUrl', () => {
   })
 
   it('keeps the map and the test matrix exhaustive', () => {
-    expect(Object.keys(swapKitTrackerChainIds)).toHaveLength(27)
+    expect(Object.keys(swapKitTrackerChainIds)).toHaveLength(26)
   })
 
   it('encodes the hash without altering it', () => {

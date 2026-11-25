@@ -7,20 +7,7 @@ import { numberToHex } from '@vultisig/lib-utils/hex/numberToHex'
 import { mirrorRecord } from '@vultisig/lib-utils/record/mirrorRecord'
 import { recordMap } from '@vultisig/lib-utils/record/recordMap'
 import { Chain as ViemChain, defineChain } from 'viem'
-import {
-  arbitrum,
-  avalanche,
-  base,
-  blast,
-  bsc,
-  cronos,
-  mainnet,
-  mantle,
-  optimism,
-  polygon,
-  sei,
-  zksync,
-} from 'viem/chains'
+import { arbitrum, avalanche, base, bsc, cronos, mainnet, mantle, optimism, polygon, sei, zksync } from 'viem/chains'
 
 const hyperliquidRpcUrl = `${rootApiUrl}/hyperevm/`
 // HyperEVM transactions and addresses live under hypurrscan's `/evm/` section.
@@ -82,7 +69,6 @@ const evmChainRpcUrls: Record<EvmChain, string> = {
   [EvmChain.Polygon]: `${rootApiUrl}/polygon/`,
   [EvmChain.Optimism]: `${rootApiUrl}/opt/`,
   [EvmChain.CronosChain]: 'https://cronos-evm-rpc.publicnode.com',
-  [EvmChain.Blast]: `${rootApiUrl}/blast/`,
   [EvmChain.BSC]: `${rootApiUrl}/bsc/`,
   [EvmChain.Zksync]: `${rootApiUrl}/zksync/`,
   [EvmChain.Avalanche]: `${rootApiUrl}/avax/`,
@@ -99,7 +85,6 @@ const evmDefaultChainInfo: Record<EvmChain, ViemChain> = {
   [EvmChain.Polygon]: polygon,
   [EvmChain.Optimism]: optimism,
   [EvmChain.CronosChain]: cronos,
-  [EvmChain.Blast]: blast,
   [EvmChain.BSC]: bsc,
   [EvmChain.Zksync]: zksync,
   [EvmChain.Avalanche]: avalanche,

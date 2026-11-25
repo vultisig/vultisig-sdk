@@ -37,7 +37,6 @@ const chainToPlatform: Readonly<Record<string, string>> = {
   Base: 'base',
   Solana: 'solana',
   Mantle: 'mantle',
-  Blast: 'blast',
   Zksync: 'zksync',
   CronosChain: 'cronos',
   Hyperliquid: 'hyperliquid',

@@ -27,16 +27,7 @@ const DEFAULT_TIMEOUT_MS = 15_000
  * Across-supported EVM chains for the current factory scope. Origin is pinned to
  * Ethereum; any of these (except the origin) can be a destination.
  */
-export const acrossSupportedChains = [
-  'Ethereum',
-  'Optimism',
-  'Polygon',
-  'Arbitrum',
-  'Base',
-  'Blast',
-  'BSC',
-  'Zksync',
-] as const
+export const acrossSupportedChains = ['Ethereum', 'Optimism', 'Polygon', 'Arbitrum', 'Base', 'BSC', 'Zksync'] as const
 
 export type AcrossChain = (typeof acrossSupportedChains)[number]
 
@@ -57,7 +48,6 @@ const acrossChainIds = {
   Polygon: 137,
   Arbitrum: 42161,
   Base: 8453,
-  Blast: 81457,
   BSC: 56,
   Zksync: 324,
 } as const satisfies Record<AcrossChain, number>
@@ -73,7 +63,6 @@ const acrossSpokePools = {
   Polygon: '0x9295ee1d8c5b022be115a2ad3c30c72e34e7f096',
   Arbitrum: '0xe35e9842fceaca96570b734083f4a58e8f7c5f2a',
   Base: '0x09aea4b2242abc8bb4bb78d537a67a245a7bec64',
-  Blast: '0x2D509190Ed0172ba588407D4c2df918F955Cc6E1',
   BSC: '0x4e8E2fD692c1A2fD815bC048C600008dBdABd505',
   Zksync: '0xE0B015E54d54fc84a6cB9B666099c46adE9335FF',
 } as const satisfies Record<AcrossChain, `0x${string}`>
