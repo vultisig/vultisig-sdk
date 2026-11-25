@@ -1,4 +1,5 @@
 import { Chain } from '@vultisig/core-chain/Chain'
+import { rootApiUrl } from '@vultisig/core-config'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const queryUrlMock = vi.hoisted(() => vi.fn())
@@ -49,10 +50,11 @@ describe('getPolkadotCoinBalance — pallet_assets.Account (Asset Hub tokens)', 
     expect(balance).toBe(1_000_000n)
     expect(queryUrlMock).toHaveBeenCalledTimes(1)
 
-    // Verify it called Asset Hub (not relay chain) with the correct storage key.
+    // Verify it called Asset Hub with the correct storage key. `/dot/` serves
+    // Asset Hub; the retired `/dot-ah/` proxy returns 404.
     const call = queryUrlMock.mock.calls[0]
     const url: string = call[0]
-    expect(url).toContain('dot-ah')
+    expect(url).toBe(`${rootApiUrl}/dot/`)
 
     const storageKey: string = call[1].body.params[0]
     // key must start with twox128("Assets") + twox128("Account")
@@ -81,6 +83,7 @@ describe('getPolkadotCoinBalance — pallet_assets.Account (Asset Hub tokens)', 
 
     expect(balance).toBe(500_000n)
     expect(queryUrlMock).toHaveBeenCalledTimes(1)
+    expect(queryUrlMock.mock.calls[0][0]).toBe(`${rootApiUrl}/dot/`)
 
     // Key must contain le_u32(1337) = 39050000 in the asset segment
     const storageKey: string = queryUrlMock.mock.calls[0][1].body.params[0]
@@ -214,7 +217,7 @@ describe('getPolkadotCoinBalance — native DOT path (no id)', () => {
     queryUrlMock.mockReset()
   })
 
-  it('queries relay chain RPC for native DOT (no id present)', async () => {
+  it('queries the Asset Hub RPC for native DOT (no id present)', async () => {
     // SCALE-encoded AccountInfo with free balance = 1_000_000_000_000n (1 DOT)
     // Layout: nonce(u32=0) + consumers(u32=0) + providers(u32=1) + sufficients(u32=0)
     //         + free(u128) + reserved(u128) + frozen(u128) + flags(u128)
@@ -242,10 +245,9 @@ describe('getPolkadotCoinBalance — native DOT path (no id)', () => {
 
     expect(queryUrlMock).toHaveBeenCalledTimes(1)
 
-    // Must call the relay chain, not Asset Hub
+    // Native DOT lives on Asset Hub, served at `/dot/`
     const url: string = queryUrlMock.mock.calls[0][0]
-    expect(url).not.toContain('dot-ah')
-    expect(url).toContain('/dot/')
+    expect(url).toBe(`${rootApiUrl}/dot/`)
 
     // Must use System.Account prefix, not Assets.Account
     const storageKey: string = queryUrlMock.mock.calls[0][1].body.params[0]
@@ -263,5 +265,24 @@ describe('getPolkadotCoinBalance — native DOT path (no id)', () => {
     })
 
     expect(balance).toBe(0n)
+  })
+})
+
+describe('getPolkadotCoinBalance — endpoint', () => {
+  beforeEach(() => {
+    queryUrlMock.mockReset()
+  })
+
+  it('reads native DOT and Asset Hub tokens from the same chain', async () => {
+    queryUrlMock.mockResolvedValue({ result: null })
+
+    await getPolkadotCoinBalance({ chain: Chain.Polkadot, address: VALID_DOT_ADDRESS })
+    await getPolkadotCoinBalance({ chain: Chain.Polkadot, address: VALID_DOT_ADDRESS, id: '1984' })
+
+    const [nativeCall, tokenCall] = queryUrlMock.mock.calls
+    expect(tokenCall[0]).toBe(nativeCall[0])
+    expect(tokenCall[0]).not.toContain('dot-ah')
+    expect(nativeCall[1].body).toMatchObject({ jsonrpc: '2.0', method: 'state_getStorage' })
+    expect(tokenCall[1].body).toMatchObject({ jsonrpc: '2.0', method: 'state_getStorage' })
   })
 })

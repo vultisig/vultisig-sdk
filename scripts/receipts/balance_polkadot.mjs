@@ -30,10 +30,10 @@ const main = async () => {
   console.log(JSON.stringify(native, null, 2))
   console.log('')
 
-  // Asset Hub (pallet_assets) read — best-effort: the `/dot-ah/` proxy is not always
-  // deployed on the public api.vultisig.com gateway. The native read above is the
-  // headline live proof; the asset SCALE-parse path is exhaustively covered by the
-  // unit test (tests/unit/tools/balance/polkadot.test.ts).
+  // Asset Hub (pallet_assets) read through the same `/dot/` proxy as the native read.
+  // Kept best-effort so a proxy outage doesn't hide the native result above; the
+  // asset SCALE-parse path is covered by the unit test
+  // (tests/unit/tools/balance/polkadot.test.ts).
   console.log(`ASSET (pallet_assets, id=${USDT_ASSET_ID} USDT):`)
   try {
     const usdt = await getPolkadotAssetBalance(ADDRESS, USDT_ASSET_ID)
