@@ -1,6 +1,6 @@
 import { getQuote } from '@lifi/sdk'
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
-import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
+import { getSolanaTokenAccountRent } from '@vultisig/core-chain/chains/solana/tokenAccountRent'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import {
   getLifiClient,
@@ -132,15 +132,9 @@ export const getLifiSwapQuote = async ({
     // do NOT re-validate payer balance here (that would require an extra RPC call
     // and the wallet UI is expected to gate on "insufficient funds" before submit).
 
-    // ATA creation costs ~2,039,280 lamports rent exemption (solanaConfig.ataRentLamports).
-    // This is a build-time constant; Solana's rent-exempt threshold can theoretically
-    // change via on-chain governance (sysvar::Rent). In practice this value has been
-    // stable since mainnet launch — tracking at https://docs.solana.com/developing/runtime-facilities/sysvars#rent.
-    // If a governance vote changes the threshold, update solanaConfig.ataRentLamports.
-    // A runtime fetch via getMinimumBalanceForRentExemption(AccountLayout.span) would
-    // be exact but adds an extra RPC round-trip to every Solana SPL quote; the
-    // build-time constant is the deliberate tradeoff here.
-    const ataRentBuffer = ataInjected ? BigInt(solanaConfig.ataRentLamports) : 0n
+    // The injected create instruction funds the new token account's rent. The
+    // live value is cached, so most quotes make no extra RPC call.
+    const ataRentBuffer = ataInjected ? await getSolanaTokenAccountRent() : 0n
 
     return {
       dstAmount: estimate.toAmount,

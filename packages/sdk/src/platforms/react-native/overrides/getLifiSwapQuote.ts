@@ -21,7 +21,7 @@
 // Public surface mirrors core byte-for-byte: one `getLifiSwapQuote(input)`
 // export returning `Promise<GeneralSwapQuote>`.
 import { DeriveChainKind, getChainKind } from '@vultisig/core-chain/ChainKind'
-import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
+import { getSolanaTokenAccountRent } from '@vultisig/core-chain/chains/solana/tokenAccountRent'
 import { AccountCoinKey } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { toMaxSlippageBps } from '@vultisig/core-chain/swap/general/calldataMinOutput'
@@ -155,7 +155,7 @@ export const getLifiSwapQuote = async ({
 
     const { data: patchedData, ataInjected } = await injectSolanaAtaIfMissing(rawData, toToken, toAddress, fromAddress)
 
-    const ataRentBuffer = ataInjected ? BigInt(solanaConfig.ataRentLamports) : 0n
+    const ataRentBuffer = ataInjected ? await getSolanaTokenAccountRent() : 0n
 
     return {
       dstAmount: estimate.toAmount,

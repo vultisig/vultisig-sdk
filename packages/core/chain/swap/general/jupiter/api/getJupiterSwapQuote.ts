@@ -2,6 +2,7 @@ import { PublicKey } from '@solana/web3.js'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { assertSafeSolanaSwapTransactionBase64 } from '@vultisig/core-chain/chains/solana/assertSafeSolanaSwapInstructions'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
+import { getSolanaTokenAccountRent } from '@vultisig/core-chain/chains/solana/tokenAccountRent'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { GeneralSwapQuote } from '@vultisig/core-chain/swap/general/GeneralSwapQuote'
 import {
@@ -176,7 +177,7 @@ export const getJupiterSwapQuote = async ({
   // the fee-ATA rent buffer when we prepend a create instruction (charged once
   // per fee mint; idempotent thereafter). Jupiter embeds its own priority fee in
   // the returned tx, which the consumer surfaces at broadcast time.
-  const networkFee = BigInt(solanaConfig.baseFee) + (chargesFee ? BigInt(solanaConfig.ataRentLamports) : 0n)
+  const networkFee = BigInt(solanaConfig.baseFee) + (chargesFee ? await getSolanaTokenAccountRent() : 0n)
 
   return {
     dstAmount: quoteResponse.outAmount,

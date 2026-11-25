@@ -1,6 +1,7 @@
 import { VersionedTransaction } from '@solana/web3.js'
 import { getSolanaMessageFee } from '@vultisig/core-chain/chains/solana/computeBudget'
 import { solanaConfig } from '@vultisig/core-chain/chains/solana/solanaConfig'
+import { getSolanaTokenAccountRent } from '@vultisig/core-chain/chains/solana/tokenAccountRent'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { Buffer } from 'buffer'
@@ -25,14 +26,16 @@ const getProviderSwapNetworkFee = (keysignPayload: KeysignPayload): bigint | und
   return getSolanaMessageFee(VersionedTransaction.deserialize(Buffer.from(data, 'base64')).message)
 }
 
-export const getSolanaFeeAmount: FeeAmountResolver = ({ keysignPayload }) => {
+export const getSolanaFeeAmount: FeeAmountResolver = async ({ keysignPayload }) => {
   const { priorityFee, computeLimit, toTokenAssociatedAddress } = getBlockchainSpecificValue(
     keysignPayload.blockchainSpecific,
     'solanaSpecific'
   )
 
   const coin = getKeysignCoin(keysignPayload)
-  const ataRent = !isFeeCoin(coin) && !toTokenAssociatedAddress ? BigInt(solanaConfig.ataRentLamports) : 0n
+  // A token send to a recipient without a token account creates one, and the
+  // sender funds its rent.
+  const ataRent = !isFeeCoin(coin) && !toTokenAssociatedAddress ? await getSolanaTokenAccountRent() : 0n
 
   const providerSwapNetworkFee = getProviderSwapNetworkFee(keysignPayload)
   if (providerSwapNetworkFee !== undefined) {

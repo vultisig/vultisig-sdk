@@ -7,18 +7,15 @@ export const solanaConfig = {
   // emits multi-signer messages this becomes 5000 * N.
   baseFee: 5000,
 
-  // Rent-exempt minimum for a 165-byte SPL token associated account, used
-  // when emitting `createAssociatedTokenAccount` alongside an SPL transfer.
+  // Fallback rent-exempt minimum for a 165-byte SPL token account, used only
+  // when the live read in `getSolanaTokenAccountRent` (./tokenAccountRent)
+  // fails. Fees and quotes use the live value.
   //
-  // Derivation: (128-byte account header + 165-byte SPL Token data)
-  //             × RENT_PER_BYTE_PER_YEAR (3480 lamports)
-  //             × 2-year threshold
-  //           = 293 × 3480 × 2
-  //           = 2,039,280 lamports
-  //
-  // Constant on mainnet/devnet/testnet today — rent rate is hardcoded in
-  // the Solana runtime. If Solana ever bumps RENT_PER_BYTE_PER_YEAR or
-  // the 2-year threshold, re-derive from the formula above.
+  // (128-byte account header + 165-byte SPL Token data) × 6,960 lamports per
+  // byte = 293 × 6,960 = 2,039,280, the rate before SIMD-0437. SIMD-0437 only
+  // lowers that rate (the live `getMinimumBalanceForRentExemption(165)` read
+  // 1,488,440 in November 2026) and its SIMD-0438 fallback restores it at
+  // most, so this stays an upper bound on the live value.
   ataRentLamports: 2_039_280,
 
   // Rent-exempt minimum for a data-less wallet (system) account. The runtime
