@@ -18,6 +18,7 @@
  */
 import { Address, beginCell, Cell, internal, SendMode, type Slice, storeMessageRelaxed } from '@ton/core'
 import { TW } from '@trustwallet/wallet-core'
+import { assertTonMainnetAddress } from '@vultisig/core-chain/chains/ton/address'
 import { type TonJettonCommentContext, validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
 import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 
@@ -400,6 +401,7 @@ function buildExternalMessageCell(args: {
  *   4. Broadcast `signedBocBase64` via `broadcastTonTx`.
  */
 export function buildTonSendTx(opts: BuildTonSendOptions): TonWalletCoreBackedTxBuilderResult {
+  assertTonMainnetAddress(opts.to)
   const { subWalletId, workchain, walletVersion } = assertWalletCoreTonWalletOptions(opts)
   const pubKey = hexToBytes(opts.publicKeyEd25519)
   const wallet = buildTonWallet({ walletVersion, publicKeyEd25519: pubKey, workchain, walletId: subWalletId })
@@ -515,6 +517,8 @@ export type BuildTonJettonTransferOptions = {
  * contract's request. Same signing flow and result contract as `buildTonSendTx`.
  */
 export function buildTonJettonTransferTx(opts: BuildTonJettonTransferOptions): TonWalletCoreBackedTxBuilderResult {
+  assertTonMainnetAddress(opts.to)
+  assertTonMainnetAddress(opts.jettonWalletAddress)
   const { subWalletId, workchain, walletVersion } = assertWalletCoreTonWalletOptions(opts)
   const pubKey = hexToBytes(opts.publicKeyEd25519)
   const wallet = buildTonWallet({ walletVersion, publicKeyEd25519: pubKey, workchain, walletId: subWalletId })

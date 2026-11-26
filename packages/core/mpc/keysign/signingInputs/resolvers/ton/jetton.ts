@@ -1,3 +1,4 @@
+import { assertTonMainnetAddress } from '@vultisig/core-chain/chains/ton/address'
 import { validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
 import { tonConfig } from '@vultisig/core-chain/chains/ton/config'
 import { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
@@ -39,6 +40,8 @@ export const buildJettonTransfer = ({
     throw new Error('Cannot build a TON Jetton transfer: the sender jetton wallet address is missing')
   }
 
+  assertTonMainnetAddress(keysignPayload.toAddress)
+  assertTonMainnetAddress(jettonAddress)
   const coin = getKeysignCoin(keysignPayload)
 
   const destinationAddress = walletCore.TONAddressConverter.toUserFriendly(keysignPayload.toAddress, true, false)
