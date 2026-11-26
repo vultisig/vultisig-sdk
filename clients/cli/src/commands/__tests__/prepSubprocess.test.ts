@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { Chain } from '@vultisig/core-chain/Chain'
 import { describe, expect, it } from 'vitest'
 
 const CLI_ENTRY = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'index.ts')
@@ -210,6 +211,39 @@ describe('prep commands exercise SDK helpers through a real subprocess', { timeo
     )
     expect(result.signingHashHex).toMatch(/^[0-9a-f]{64}$/)
     expect(result.unsignedBocHex).toBeTruthy()
+  })
+
+  it('uses the imported TON key for Jetton prep', () => {
+    const result = expectSuccess(
+      [
+        'jetton-transfer',
+        'UQCXhTIYi7zucgALWCxYRAHjwJbLDyZVUZVOa-FzD7UA5P5O',
+        'EQAtiFQ15MZBgpAGwD1jfJm6maz5otBOPefyw9Wc3MVmMgzp',
+        '1000000',
+        '5',
+        '--identity',
+        JSON.stringify({ ...JSON.parse(IDENTITY), chainPublicKeys: { [Chain.Ton]: 'bb'.repeat(32) } }),
+      ],
+      'jetton-transfer'
+    )
+    expect(result.fromAddress).toBe('UQCX0Xb0_8daO9hhHFdkMMUog8iBTwfEhBOdBTuG2iTyt8Q5')
+  })
+
+  it('rejects Jetton prep when the imported key map has no TON key', () => {
+    const result = runPrep([
+      'jetton-transfer',
+      'UQCXhTIYi7zucgALWCxYRAHjwJbLDyZVUZVOa-FzD7UA5P5O',
+      'EQAtiFQ15MZBgpAGwD1jfJm6maz5otBOPefyw9Wc3MVmMgzp',
+      '1000000',
+      '5',
+      '--identity',
+      JSON.stringify({ ...JSON.parse(IDENTITY), chainPublicKeys: { [Chain.Solana]: 'bb'.repeat(32) } }),
+    ])
+    expect(result.status).not.toBe(0)
+    expect(JSON.parse(result.stdout)).toMatchObject({
+      success: false,
+      error: { message: 'Chain public key not found' },
+    })
   })
 
   it('routes Sui token arguments to the helper before RPC access', () => {

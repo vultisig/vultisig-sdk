@@ -10,8 +10,12 @@
  * or broadcasting happens (finalize is a separate, caller-driven step).
  */
 import { Address, Cell, loadMessageRelaxed } from '@ton/core'
+import { TW } from '@trustwallet/wallet-core'
+import { Chain } from '@vultisig/core-chain/Chain'
+import { tonWalletVersions } from '@vultisig/core-chain/chains/ton/wallet'
 import { describe, expect, it } from 'vitest'
 
+import { buildTonJettonTransferTx, deriveTonAddress } from '@/chains/ton/tx'
 import { buildV4R2Wallet } from '@/chains/ton/walletV4R2'
 import { prepareJettonTransferTxFromKeys } from '@/tools/prep/jettonTransfer'
 import type { VaultIdentity } from '@/tools/prep/types'
@@ -38,6 +42,81 @@ const JETTON_WALLET = 'EQAtiFQ15MZBgpAGwD1jfJm6maz5otBOPefyw9Wc3MVmMgzp'
 const JETTON_TRANSFER_OPCODE = 0xf8a7ea5
 
 describe('prepareJettonTransferTxFromKeys', () => {
+  describe.each(tonWalletVersions)('%s key selection', walletVersion => {
+    const params = {
+      receiver: RECIPIENT,
+      jettonWalletAddress: JETTON_WALLET,
+      amount: 1n,
+      seqno: 0,
+      validUntil: 1_800_000_000,
+      walletVersion,
+    }
+    const tonKey = 'bb'.repeat(32)
+
+    it.each([PUBKEY_HEX, ''])('uses the imported TON key with root key %j', eddsaPublicKey => {
+      const tx = prepareJettonTransferTxFromKeys(
+        { ...identity, eddsaPublicKey, chainPublicKeys: { [Chain.Ton]: tonKey, [Chain.Solana]: PUBKEY_HEX } },
+        params
+      )
+      const expected = buildTonJettonTransferTx({
+        publicKeyEd25519: tonKey,
+        to: params.receiver,
+        ...params,
+      })
+
+      expect(tx.fromAddress).toBe(deriveTonAddress(tonKey, { walletVersion }))
+      expect(tx.fromAddress).not.toBe(deriveTonAddress(PUBKEY_HEX, { walletVersion }))
+      expect(tx.signingHashHex).toBe(expected.signingHashHex)
+      expect(tx.unsignedBocHex).toBe(expected.unsignedBocHex)
+      const signingInput = TW.TheOpenNetwork.Proto.SigningInput.decode(tx.walletCoreTxInputData)
+      expect(Buffer.from(signingInput.publicKey).toString('hex')).toBe(tonKey)
+    })
+
+    it.each([undefined, {}])('retains the root key for an ordinary vault with map %j', chainPublicKeys => {
+      const tx = prepareJettonTransferTxFromKeys({ ...identity, chainPublicKeys }, params)
+      expect(tx.fromAddress).toBe(deriveTonAddress(PUBKEY_HEX, { walletVersion }))
+      const signingInput = TW.TheOpenNetwork.Proto.SigningInput.decode(tx.walletCoreTxInputData)
+      expect(Buffer.from(signingInput.publicKey).toString('hex')).toBe(PUBKEY_HEX)
+    })
+
+    it.each([{ [Chain.Solana]: tonKey }, { [Chain.Ton]: '' }])(
+      'rejects an imported key map without a usable TON entry: %j',
+      chainPublicKeys => {
+        expect(() => prepareJettonTransferTxFromKeys({ ...identity, chainPublicKeys }, params)).toThrow(
+          'Chain public key not found'
+        )
+      }
+    )
+
+    it.each(['zz'.repeat(32), 'bb'.repeat(31)])(
+      'rejects a malformed imported TON key without root fallback: %s',
+      tonKey => {
+        expect(() =>
+          prepareJettonTransferTxFromKeys({ ...identity, chainPublicKeys: { [Chain.Ton]: tonKey } }, params)
+        ).toThrow()
+      }
+    )
+  })
+
+  it('matches the imported key to a deployed V4R2 account', () => {
+    // tether-treasury.ton get_public_key, checked against its deployed account:
+    // https://tonviewer.com/0:23fa979918f1fe702db9100bf843e87c7015eccd39a4721e9b6bac170bc04ce3
+    const tonKey = '1d783bc017a24a6586b0262ed71854b12c1dbb6b6590d2d741e28bbc57b28773'
+    const tx = prepareJettonTransferTxFromKeys(
+      { ...identity, chainPublicKeys: { [Chain.Ton]: tonKey } },
+      {
+        receiver: RECIPIENT,
+        jettonWalletAddress: JETTON_WALLET,
+        amount: 1n,
+        seqno: 136,
+        validUntil: 1_800_000_000,
+      }
+    )
+    expect(Address.parse(tx.fromAddress).toRawString()).toBe(
+      '0:23fa979918f1fe702db9100bf843e87c7015eccd39a4721e9b6bac170bc04ce3'
+    )
+  })
+
   it('builds a deterministic unsigned jetton transfer (no sign, no broadcast)', () => {
     const tx = prepareJettonTransferTxFromKeys(identity, {
       receiver: RECIPIENT,
