@@ -1,6 +1,13 @@
+import { Address } from '@ton/core'
 import { describe, expect, it } from 'vitest'
 
-import { areEqualTonAddresses, getTonAddressBounceability, tonAddressToBounceable, tonAddressToRaw } from './address'
+import {
+  areEqualTonAddresses,
+  getTonAddressBounceability,
+  tonAddressToBounceable,
+  tonAddressToRaw,
+  tonAddressToRawKey,
+} from './address'
 
 // One account in every spelling it has, so a test that claims two forms name the
 // same account is actually asserting that and not comparing two accounts.
@@ -11,10 +18,51 @@ const testnetBounceable = 'kQCIcjES4cQET0z6nRixZ0MdvTB4u3_8triztLSrIIrDkiOD'
 const raw = '0:88723112e1c4044f4cfa9d18b167431dbd3078bb7ffcb6b8b3b4b4ab208ac392'
 const otherAccount = 'EQCrq6urq6urq6urq6urq6urq6urq6urq6urq6urq6urq8Uk'
 
+const decoderNormalizedSpellings = (address: string): string[] => [
+  `${address}\n`,
+  ` \t${address}\r\n`,
+  `${address.slice(0, 12)} \t\n${address.slice(12)}`,
+  `${address}=`,
+  `${address}!`,
+  `${address}AA`,
+]
+
 describe('tonAddressToRaw', () => {
   it('decodes a user-friendly address to workchain:hex', () => {
     expect(tonAddressToRaw(bounceable)).toBe(raw)
   })
+
+  it.each([true, false].map(bounceable => Address.parse(raw).toString({ bounceable, testOnly: true })))(
+    'rejects testnet flags after base64 decoder normalization: %s',
+    address => {
+      for (const encoded of [address, address.replace(/_/g, '/').replace(/-/g, '+')]) {
+        for (const input of decoderNormalizedSpellings(encoded)) {
+          expect(() => tonAddressToRaw(input)).toThrow(/testnet-only/)
+          expect(() => tonAddressToRawKey(input)).toThrow(/testnet-only/)
+        }
+      }
+    }
+  )
+
+  it.each([bounceable, nonBounceable, nonBounceableStandardBase64])(
+    'preserves mainnet conversion after base64 decoder normalization: %s',
+    address => {
+      expect(tonAddressToRaw(address)).toBe(raw)
+      for (const input of decoderNormalizedSpellings(address)) {
+        expect(tonAddressToRaw(input)).toBe(raw)
+        expect(tonAddressToRawKey(input)).toBe(raw)
+      }
+    }
+  )
+})
+
+describe('tonAddressToRawKey', () => {
+  it.each([raw, raw.toUpperCase(), '-1:88723112e1c4044f4cfa9d18b167431dbd3078bb7ffcb6b8b3b4b4ab208ac392'])(
+    'preserves raw address keys: %s',
+    address => {
+      expect(tonAddressToRawKey(address)).toBe(address.toLowerCase())
+    }
+  )
 })
 
 describe('tonAddressToBounceable', () => {

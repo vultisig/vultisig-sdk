@@ -2,13 +2,15 @@ import { Address } from '@ton/core'
 import { attempt } from '@vultisig/lib-utils/attempt'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
+const testnetOnlyAddressMessage = 'A testnet-only TON address cannot be used on mainnet'
+
 /** Rejects testnet-only friendly destinations before mainnet address normalization. */
 export const assertTonMainnetAddress = (address: string): void => {
   // Raw spellings carry no network flag; retain the signer's existing syntax rules.
   if (!Address.isFriendly(address)) return
   const parsed = Address.parseFriendly(address)
   if (parsed.isTestOnly) {
-    throw new Error('A testnet-only TON address cannot be used on mainnet')
+    throw new Error(testnetOnlyAddressMessage)
   }
 }
 
@@ -25,6 +27,11 @@ const fromBase64Url = (value: string): Buffer => {
 export const tonAddressToRaw = (userFriendlyAddress: string): string => {
   assertTonMainnetAddress(userFriendlyAddress)
   const decoded = fromBase64Url(userFriendlyAddress)
+  // The base64 decoder ignores whitespace and other non-canonical spelling.
+  // Check the decoded flag too, before discarding the tag in the raw form.
+  if ((decoded[0] & 0x80) !== 0) {
+    throw new Error(testnetOnlyAddressMessage)
+  }
   const workchain = decoded[1] >= 128 ? decoded[1] - 256 : decoded[1]
   const hash = decoded.subarray(2, 34).toString('hex')
 
