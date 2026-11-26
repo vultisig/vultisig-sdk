@@ -248,11 +248,12 @@ describe('W5 jetton transfer', () => {
     expectByteIdenticalSignedMessage(build({ publicKeyEd25519: throwawayPublicKeyHex() }))
   })
 
-  it('is reachable through the vault-free prep helper', () => {
+  it.each([false, true])('is reachable through the vault-free prep helper (imported: %s)', imported => {
     const viaPrep = prepareJettonTransferTxFromKeys(
       {
         ecdsaPublicKey: '',
-        eddsaPublicKey: jetton.publicKeyEd25519Hex,
+        eddsaPublicKey: imported ? '01'.repeat(32) : jetton.publicKeyEd25519Hex,
+        chainPublicKeys: imported ? { [Chain.Ton]: jetton.publicKeyEd25519Hex } : undefined,
         hexChainCode: '',
         localPartyId: 'w5-fixture',
         libType: 'DKLS',
@@ -271,6 +272,8 @@ describe('W5 jetton transfer', () => {
     )
 
     expect(viaPrep.signingHashHex).toBe(jetton.expectedSigningHashHex)
+    expect(viaPrep.fromAddress).toBe(jetton.senderAddress)
+    expectWalletCoreParity(viaPrep)
   })
 })
 

@@ -1,3 +1,4 @@
+import { Chain } from '@vultisig/core-chain/Chain'
 import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
 
 import { buildTonJettonTransferTx, type TonWalletCoreBackedTxBuilderResult } from '../../chains/ton/tx'
@@ -58,9 +59,9 @@ export type PrepareJettonTransferTxFromKeysParams = {
  * the hash independently before dispatch, then feed the resulting 64-byte
  * Ed25519 signature through `finalize` to obtain the broadcast-ready BoC.
  *
- * For TON the wallet's Ed25519 key is the vault's root EdDSA public key
- * directly (no chain-code derivation), so `identity.eddsaPublicKey` is passed
- * straight through to the V4R2 wallet builder.
+ * Imported vaults use their chain-specific TON key. Ordinary vaults use the
+ * root EdDSA key directly (no chain-code derivation). A populated imported-key
+ * map must contain TON, matching the shared public-key resolver's rules.
  *
  * @example
  * ```ts
@@ -80,12 +81,18 @@ export const prepareJettonTransferTxFromKeys = (
   if (params.amount <= 0n) {
     throw new Error('Amount must be greater than zero')
   }
-  if (!identity.eddsaPublicKey) {
+  const chainPublicKey = identity.chainPublicKeys?.[Chain.Ton]
+  if (identity.chainPublicKeys !== undefined && Object.keys(identity.chainPublicKeys).length > 0 && !chainPublicKey) {
+    throw new Error('Chain public key not found')
+  }
+
+  const publicKeyEd25519 = chainPublicKey ?? identity.eddsaPublicKey
+  if (!publicKeyEd25519) {
     throw new Error('Vault EdDSA public key required for TON Jetton transfer')
   }
 
   return buildTonJettonTransferTx({
-    publicKeyEd25519: identity.eddsaPublicKey,
+    publicKeyEd25519,
     to: params.receiver,
     jettonWalletAddress: params.jettonWalletAddress,
     amount: params.amount,
