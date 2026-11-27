@@ -283,4 +283,35 @@ describe('send --utxo', () => {
 
     expect(logged.join('\n')).toContain('UTXOs:   2 selected')
   })
+
+  it('skips confirmed vault.balance reads on both dry-run preview and confirmed send when --utxo is set', async () => {
+    const vault = makeBtcVault('0')
+    ;(vault.balance as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Balance provider unavailable'))
+    configureOutput({ format: 'json' })
+
+    await sendTransaction(vault, {
+      chain: Chain.Bitcoin,
+      to: 'bc1qrecipient',
+      amount: '0.55',
+      selectedUtxos,
+      dryRun: true,
+    })
+
+    const preview = JSON.parse(stdout.join('')).data
+    expect(preview.balance).toBe('0.6')
+    expect(preview.symbol).toBe('BTC')
+    expect(vault.balance).not.toHaveBeenCalled()
+
+    stdout = []
+    await sendTransaction(vault, {
+      chain: Chain.Bitcoin,
+      to: 'bc1qrecipient',
+      amount: '0.55',
+      selectedUtxos,
+      yes: true,
+    })
+
+    expect(vault.balance).not.toHaveBeenCalled()
+    expect(JSON.parse(stdout.join('')).data.txHash).toBe('deadbeef'.repeat(8))
+  })
 })
