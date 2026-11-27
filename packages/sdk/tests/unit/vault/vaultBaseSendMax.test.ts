@@ -7,12 +7,14 @@ const {
   mockBuildSendKeysignPayload,
   mockGetSendFeeEstimate,
   mockGetPublicKey,
+  mockGetUtxos,
   mockGetUtxoSigningInputs,
   mockIsValidRecipient,
 } = vi.hoisted(() => ({
   mockBuildSendKeysignPayload: vi.fn(),
   mockGetSendFeeEstimate: vi.fn(),
   mockGetPublicKey: vi.fn(),
+  mockGetUtxos: vi.fn(),
   mockGetUtxoSigningInputs: vi.fn(),
   mockIsValidRecipient: vi.fn(),
 }))
@@ -25,6 +27,9 @@ vi.mock('@vultisig/core-mpc/keysign/send/getSendFeeEstimate', () => ({
 }))
 vi.mock('@vultisig/core-mpc/keysign/signingInputs/resolvers/utxo', () => ({
   getUtxoSigningInputs: mockGetUtxoSigningInputs,
+}))
+vi.mock('@vultisig/core-chain/chains/utxo/tx/getUtxos', () => ({
+  getUtxos: mockGetUtxos,
 }))
 vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   getPublicKey: mockGetPublicKey,
@@ -255,5 +260,70 @@ describe('VaultBase.send — MAX intent', () => {
     })
     expect(planner).toHaveBeenCalledTimes(1)
     expect(mockBuildSendKeysignPayload).toHaveBeenCalledWith(expect.objectContaining({ sendMaxAmount: false }))
+  })
+
+  it('includes unconfirmed UTXOs for a Bitcoin max dry-run when includeUnconfirmed is true', async () => {
+    const fee = 2_000n
+    mockGetUtxos.mockResolvedValue([
+      { hash: 'aa'.repeat(32), index: 0, amount: 10_000_000n },
+      { hash: 'bb'.repeat(32), index: 1, amount: 50_000_000n },
+    ])
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+    mockGetPublicKey.mockReturnValue({ __mock: 'publicKey' })
+    mockIsValidRecipient.mockReturnValue(true)
+
+    const getBalance = vi.fn()
+    const prepareSendTx = vi.fn().mockResolvedValue({ __mock: 'bitcoin-payload' })
+    const estimateSendFee = vi.fn().mockResolvedValue(fee)
+    const bitcoinCoin = {
+      chain: Chain.Bitcoin,
+      address: 'bc1qsender',
+      decimals: 8,
+      ticker: 'BTC',
+    }
+    const stub = {
+      resolveTokenInfo: () => ({ decimals: 8, ticker: 'BTC', contractAddress: undefined }),
+      buildAccountCoin: () => bitcoinCoin,
+      address: async () => bitcoinCoin.address,
+      getMaxSendAmount: VaultBase.prototype.getMaxSendAmount,
+      wasmProvider: { getWalletCore: vi.fn().mockResolvedValue({ __mock: 'walletCore' }) },
+      balanceService: { getBalance },
+      coreVault: {
+        publicKeys: { ecdsa: '02ecdsa-public-key', eddsa: 'eddsa-public-key' },
+        hexChainCode: 'deadbeef',
+        localPartyId: 'iPhone-A1B2',
+        libType: 'DKLS',
+      },
+      parseAmount: (value: string) => BigInt(value),
+      formatUnits: (value: bigint) => value.toString(),
+      transactionBuilder: { estimateSendFee },
+      prepareSendTx,
+    }
+
+    await expect(
+      VaultBase.prototype.send.call(stub as never, {
+        chain: Chain.Bitcoin,
+        to: 'bc1qreceiver',
+        amount: 'max',
+        includeUnconfirmed: true,
+        dryRun: true,
+      })
+    ).resolves.toMatchObject({
+      dryRun: true,
+      fee: fee.toString(),
+      total: '60000000',
+    })
+
+    expect(getBalance).not.toHaveBeenCalled()
+    expect(mockGetUtxos).toHaveBeenCalledWith(
+      { chain: Chain.Bitcoin, address: bitcoinCoin.address },
+      { includeUnconfirmed: true }
+    )
+    expect(prepareSendTx).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 59_998_000n, sendMaxAmount: true, includeUnconfirmed: true })
+    )
+    expect(estimateSendFee).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 59_998_000n, sendMaxAmount: true, includeUnconfirmed: true })
+    )
   })
 })
