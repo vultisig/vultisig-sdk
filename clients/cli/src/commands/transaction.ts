@@ -3,7 +3,7 @@
  */
 import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
-import { Chain, isChainOfKind, normalizeRippleDestination, Vultisig } from '@vultisig/sdk'
+import { Chain, chainFeeCoin, isChainOfKind, normalizeRippleDestination, Vultisig } from '@vultisig/sdk'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
@@ -103,12 +103,25 @@ async function previewDryRun(
   },
   to: string
 ): Promise<SendDryRunResult> {
-  const balance = await vault.balance(params.chain, params.tokenId)
   // `vault.balance()` returns confirmed funds only; when `includeUnconfirmed`
   // is enabled, the SDK already validated affordability across confirmed +
-  // mempool UTXOs while building the dry-run payload.
+  // mempool UTXOs while building the dry-run payload, so do not fail preview
+  // if the confirmed-balance lookup errors.
+  const balance = params.includeUnconfirmed
+    ? await vault.balance(params.chain, params.tokenId).catch(() => undefined)
+    : await vault.balance(params.chain, params.tokenId)
+  const preparedCoin = dryResult.keysignPayload.coin
+  const fallbackCoin = chainFeeCoin[params.chain]
+  const coinDecimals = balance?.decimals ?? preparedCoin?.decimals ?? fallbackCoin.decimals
+  const coinSymbol = balance?.symbol ?? (preparedCoin?.ticker || dryResult.feeSymbol || fallbackCoin.ticker)
+  const formattedBalance =
+    balance?.formattedAmount ??
+    formatBigintAmount(
+      (dryResult.keysignPayload.utxoInfo ?? []).reduce((sum, utxo) => sum + utxo.amount, 0n),
+      coinDecimals
+    )
   const hasInsufficientBalance =
-    !params.includeUnconfirmed && parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
+    !params.includeUnconfirmed && parseFloat(dryResult.total) > parseFloat(formattedBalance)
   const { memo: previewMemo, destinationTag: payloadDestinationTag } = getSendPreviewDetails(
     params.chain,
     dryResult.keysignPayload
@@ -125,7 +138,7 @@ async function previewDryRun(
   // balance checked for gas it cannot pay. A native send needs no separate
   // check at all — `total` already includes the fee, and running one would
   // just report the same shortfall twice.
-  const isTokenSend = balance.tokenId !== undefined
+  const isTokenSend = balance?.tokenId !== undefined
   // Max token sends are already gated by the SDK's native-balance check while
   // calculating the max amount. Keep this preview check for explicit token
   // amounts, but do not repeat the same balance read for max sends. A gasless
@@ -139,7 +152,7 @@ async function previewDryRun(
     warnings.push(reapDisclosure)
   }
   if (hasInsufficientBalance) {
-    warnings.push(`Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`)
+    warnings.push(`Insufficient balance: you have ${formattedBalance} ${coinSymbol}`)
   }
   if (shouldCheckNativeFeeBalance && feeBalance === undefined) {
     // The gas check needs a second balance read, and it failed. Say so rather
@@ -160,12 +173,12 @@ async function previewDryRun(
     chain: params.chain,
     to,
     amount: params.amount,
-    symbol: balance.symbol,
+    symbol: coinSymbol,
     ...(dryResult.contractAddress ? { contractAddress: dryResult.contractAddress } : {}),
     fee: dryResult.fee,
     feeSymbol: dryResult.feeSymbol,
     total: dryResult.total,
-    balance: balance.formattedAmount,
+    balance: formattedBalance,
     destinationTag: payloadDestinationTag,
     ...(previewMemo ? { memo: previewMemo } : {}),
     ...(warnings.length > 0 ? { warning: warnings.join('. ') } : {}),
@@ -267,7 +280,10 @@ export async function sendTransaction(
     warn('\nGas estimation unavailable')
   }
 
-  const balance = await vault.balance(params.chain, params.tokenId)
+  const balance = params.includeUnconfirmed ? undefined : await vault.balance(params.chain, params.tokenId)
+  const previewSymbol =
+    balance?.symbol ??
+    (dryResult.keysignPayload.coin?.ticker || dryResult.feeSymbol || chainFeeCoin[params.chain].ticker)
   if (!isJsonOutput()) {
     const address = await vault.address(params.chain)
     const preview = getSendPreviewDetails(params.chain, dryResult.keysignPayload)
@@ -275,7 +291,7 @@ export async function sendTransaction(
       address,
       to,
       dryResult.total,
-      balance.symbol,
+      previewSymbol,
       params.chain,
       preview.memo,
       preview.destinationTag,

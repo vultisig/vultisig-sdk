@@ -175,4 +175,35 @@ describe('send --include-unconfirmed', () => {
     expect(preview.amount).toBe('0.5999')
     expect(preview.warning).toBeUndefined()
   })
+
+  it('skips confirmed vault.balance on confirmed send and survives balance errors in dry-run with --include-unconfirmed', async () => {
+    const vault = makeBtcVault('0')
+    ;(vault.balance as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('Balance provider unavailable'))
+    configureOutput({ format: 'json' })
+
+    await sendTransaction(vault, {
+      chain: Chain.Bitcoin,
+      to: 'bc1qrecipient',
+      amount: '0.05',
+      includeUnconfirmed: true,
+      dryRun: true,
+    })
+
+    const preview = JSON.parse(stdout.join('')).data
+    expect(preview.symbol).toBe('BTC')
+    expect(preview.warning).toBeUndefined()
+
+    stdout = []
+    ;(vault.balance as ReturnType<typeof vi.fn>).mockClear()
+    await sendTransaction(vault, {
+      chain: Chain.Bitcoin,
+      to: 'bc1qrecipient',
+      amount: '0.05',
+      includeUnconfirmed: true,
+      yes: true,
+    })
+
+    expect(vault.balance).not.toHaveBeenCalled()
+    expect(JSON.parse(stdout.join('')).data.txHash).toBe('deadbeef'.repeat(8))
+  })
 })

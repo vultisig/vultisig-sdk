@@ -49,9 +49,15 @@ export default function VaultSend({ vault }: VaultSendProps) {
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const [isLoadingMax, setIsLoadingMax] = useState(false)
+  const maxRequestIdRef = useRef(0)
 
   // Get selected token info
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null)
+
+  useEffect(() => {
+    maxRequestIdRef.current += 1
+    setIsLoadingMax(false)
+  }, [formData.chain, formData.tokenId, formData.recipient, formData.memo, formData.includeUnconfirmed])
 
   useEffect(() => {
     if (formData.tokenId && formData.chain) {
@@ -87,29 +93,44 @@ export default function VaultSend({ vault }: VaultSendProps) {
 
   const handleMaxSend = async () => {
     if (!formData.chain || !formData.recipient.trim()) return
+    const useUnconfirmed = isUtxoChain(formData.chain) && formData.includeUnconfirmed
+    const requestId = ++maxRequestIdRef.current
     setIsLoadingMax(true)
     setError(null)
     try {
       const address = await sdk.getAddress(vault.id, formData.chain)
-      const balance = await sdk.getBalance(vault.id, formData.chain, formData.tokenId || undefined)
+      let decimals: number
+      let ticker: string
+      if (useUnconfirmed) {
+        decimals = getChainNativeDecimals(formData.chain)
+        ticker = getChainNativeTicker(formData.chain)
+      } else {
+        const balance = await sdk.getBalance(vault.id, formData.chain, formData.tokenId || undefined)
+        decimals = balance.decimals
+        ticker = balance.symbol || getChainNativeTicker(formData.chain)
+      }
       const coin: CoinInfo = {
         chain: formData.chain,
         address,
-        decimals: balance.decimals,
-        ticker: balance.symbol || getChainNativeTicker(formData.chain),
-        id: formData.tokenId || undefined,
+        decimals,
+        ticker,
+        id: useUnconfirmed ? undefined : formData.tokenId || undefined,
       }
       const maxInfo = await sdk.getMaxSendAmount(vault.id, {
         coin,
         receiver: formData.recipient.trim(),
         memo: formData.memo || undefined,
-        ...(isUtxoChain(formData.chain) && formData.includeUnconfirmed ? { includeUnconfirmed: true } : {}),
+        ...(useUnconfirmed ? { includeUnconfirmed: true } : {}),
       })
-      setFormData(prev => ({ ...prev, amount: formatAmount(maxInfo.maxSendable, balance.decimals) }))
+      if (maxRequestIdRef.current !== requestId) return
+      setFormData(prev => ({ ...prev, amount: formatAmount(maxInfo.maxSendable, decimals) }))
     } catch (err: any) {
+      if (maxRequestIdRef.current !== requestId) return
       setError(`Failed to calculate max: ${err.message}`)
     } finally {
-      setIsLoadingMax(false)
+      if (maxRequestIdRef.current === requestId) {
+        setIsLoadingMax(false)
+      }
     }
   }
 
