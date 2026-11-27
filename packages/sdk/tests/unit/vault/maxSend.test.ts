@@ -1,14 +1,18 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockGetSendFeeEstimate, mockGetPublicKey, mockIsValidRecipient } = vi.hoisted(() => ({
+const { mockGetSendFeeEstimate, mockGetPublicKey, mockIsValidRecipient, mockGetUtxos } = vi.hoisted(() => ({
   mockGetSendFeeEstimate: vi.fn(),
   mockGetPublicKey: vi.fn(),
   mockIsValidRecipient: vi.fn(),
+  mockGetUtxos: vi.fn(),
 }))
 
 vi.mock('@vultisig/core-mpc/keysign/send/getSendFeeEstimate', () => ({
   getSendFeeEstimate: mockGetSendFeeEstimate,
+}))
+vi.mock('@vultisig/core-chain/chains/utxo/tx/getUtxos', () => ({
+  getUtxos: mockGetUtxos,
 }))
 vi.mock('@vultisig/core-chain/publicKey/getPublicKey', () => ({
   getPublicKey: mockGetPublicKey,
@@ -121,5 +125,48 @@ describe('VaultBase.getMaxSendAmount', () => {
 
     expect(getBalance).not.toHaveBeenCalled()
     expect(mockGetSendFeeEstimate).not.toHaveBeenCalled()
+  })
+
+  it('uses unconfirmed UTXO sum for Bitcoin max-send when includeUnconfirmed is true', async () => {
+    const getBalance = vi.fn()
+    mockGetUtxos.mockResolvedValue([
+      { hash: 'aa'.repeat(32), amount: 15_000n, index: 0 },
+      { hash: 'bb'.repeat(32), amount: 25_000n, index: 1 },
+    ])
+    mockGetSendFeeEstimate.mockResolvedValue(1_000n)
+
+    const vault = Object.create(VaultBase.prototype) as VaultBase
+    Object.assign(vault as object, {
+      wasmProvider: { getWalletCore: vi.fn().mockResolvedValue({ __mock: 'walletCore' }) },
+      balanceService: { getBalance },
+      coreVault: {
+        publicKeys: { ecdsa: '02ecdsa-public-key', eddsa: 'eddsa-public-key' },
+        hexChainCode: 'deadbeef',
+        localPartyId: 'iPhone-A1B2',
+        libType: 'DKLS',
+      },
+    })
+
+    const btcCoin = {
+      chain: Chain.Bitcoin,
+      address: 'bc1qsender',
+      decimals: 8,
+      ticker: 'BTC',
+    }
+    const result = await vault.getMaxSendAmount({
+      coin: btcCoin,
+      receiver: 'bc1qreceiver',
+      includeUnconfirmed: true,
+    })
+
+    expect(getBalance).not.toHaveBeenCalled()
+    expect(mockGetUtxos).toHaveBeenCalledWith(
+      { chain: btcCoin.chain, address: btcCoin.address },
+      { includeUnconfirmed: true }
+    )
+    expect(mockGetSendFeeEstimate).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 40_000n, sendMaxAmount: true, includeUnconfirmed: true })
+    )
+    expect(result).toEqual({ balance: 40_000n, fee: 1_000n, maxSendable: 39_000n })
   })
 })

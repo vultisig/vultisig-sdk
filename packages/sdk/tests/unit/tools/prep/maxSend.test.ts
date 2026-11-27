@@ -1,17 +1,27 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { mockGetCoinBalance, mockGetSendFeeEstimate, mockGetPublicKey, mockIsValidRecipient, mockGetWalletCore } =
-  vi.hoisted(() => ({
-    mockGetCoinBalance: vi.fn(),
-    mockGetSendFeeEstimate: vi.fn(),
-    mockGetPublicKey: vi.fn(),
-    mockIsValidRecipient: vi.fn(),
-    mockGetWalletCore: vi.fn(),
-  }))
+const {
+  mockGetCoinBalance,
+  mockGetUtxos,
+  mockGetSendFeeEstimate,
+  mockGetPublicKey,
+  mockIsValidRecipient,
+  mockGetWalletCore,
+} = vi.hoisted(() => ({
+  mockGetCoinBalance: vi.fn(),
+  mockGetUtxos: vi.fn(),
+  mockGetSendFeeEstimate: vi.fn(),
+  mockGetPublicKey: vi.fn(),
+  mockIsValidRecipient: vi.fn(),
+  mockGetWalletCore: vi.fn(),
+}))
 
 vi.mock('@vultisig/core-chain/coin/balance', () => ({
   getCoinBalance: mockGetCoinBalance,
+}))
+vi.mock('@vultisig/core-chain/chains/utxo/tx/getUtxos', () => ({
+  getUtxos: mockGetUtxos,
 }))
 vi.mock('@vultisig/core-mpc/keysign/send/getSendFeeEstimate', () => ({
   getSendFeeEstimate: mockGetSendFeeEstimate,
@@ -541,6 +551,42 @@ describe('getMaxSendAmountFromKeys', () => {
         chainPublicKeys: identity.chainPublicKeys,
       })
     )
+  })
+
+  it('computes UTXO max send from unconfirmed UTXOs when includeUnconfirmed is true', async () => {
+    const fee = 500n
+    mockGetUtxos.mockResolvedValue([
+      { hash: 'aa'.repeat(32), amount: 20_000n, index: 0 },
+      { hash: 'bb'.repeat(32), amount: 30_000n, index: 1 },
+    ])
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const coin = {
+      chain: Chain.Bitcoin,
+      address: 'bc1qsender',
+      decimals: 8,
+      ticker: 'BTC',
+    }
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin,
+      receiver: 'bc1qreceiver',
+      includeUnconfirmed: true,
+    })
+
+    expect(mockGetCoinBalance).not.toHaveBeenCalled()
+    expect(mockGetUtxos).toHaveBeenCalledWith(
+      { chain: coin.chain, address: coin.address },
+      { includeUnconfirmed: true }
+    )
+    expect(mockGetSendFeeEstimate).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 50_000n, sendMaxAmount: true, includeUnconfirmed: true })
+    )
+    expect(result).toEqual({
+      balance: 50_000n,
+      fee,
+      maxSendable: 49_500n,
+    })
   })
 })
 

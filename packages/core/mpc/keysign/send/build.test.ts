@@ -639,3 +639,91 @@ describe('buildSendKeysignPayload refinement on the hexPublicKeyOverride path', 
     expect(refineKeysignUtxoMock).toHaveBeenCalledOnce()
   })
 })
+
+describe('buildSendKeysignPayload UTXO includeUnconfirmed', () => {
+  const btcCoin = {
+    chain: Chain.Bitcoin,
+    ticker: 'BTC',
+    address: 'bc1qsender',
+    decimals: 8,
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getCoinBalanceMock.mockResolvedValue(10_000n)
+    getKeysignUtxoInfoMock.mockResolvedValue([
+      { hash: 'aa'.repeat(32), amount: 10_000n, index: 0 },
+      { hash: 'bb'.repeat(32), amount: 50_000n, index: 1 },
+    ])
+    getChainSpecificMock.mockImplementation(async input => ({
+      case: 'utxoSpecific',
+      value: await getUtxoChainSpecific({ ...input, feeSettings: { byteFee: 10n } }),
+    }))
+  })
+
+  it('forwards includeUnconfirmed to getKeysignUtxoInfo and derives balance from fetched UTXOs', async () => {
+    const payload = await buildSendKeysignPayload({
+      coin: btcCoin,
+      receiver: 'bc1qrecipient',
+      amount: 45_000n,
+      vaultId: 'vault-public-key',
+      localPartyId: 'party-1',
+      publicKey: null,
+      hexPublicKeyOverride: `02${'ab'.repeat(32)}`,
+      libType: 'DKLS',
+      walletCore: {} as never,
+      includeUnconfirmed: true,
+    })
+
+    expect(getKeysignUtxoInfoMock).toHaveBeenCalledWith(btcCoin, { includeUnconfirmed: true })
+    expect(getCoinBalanceMock).not.toHaveBeenCalled()
+    expect(vi.mocked(refineKeysignAmount)).toHaveBeenCalledWith(expect.objectContaining({ balance: 60_000n }))
+    expect(refineKeysignUtxoMock).toHaveBeenCalledOnce()
+    expect(payload.utxoInfo).toHaveLength(2)
+  })
+
+  it('preserves default confirmed-only lookup when includeUnconfirmed is omitted', async () => {
+    await buildSendKeysignPayload({
+      coin: btcCoin,
+      receiver: 'bc1qrecipient',
+      amount: 5_000n,
+      vaultId: 'vault-public-key',
+      localPartyId: 'party-1',
+      publicKey: null,
+      hexPublicKeyOverride: `02${'ab'.repeat(32)}`,
+      libType: 'DKLS',
+      walletCore: {} as never,
+    })
+
+    expect(getKeysignUtxoInfoMock).toHaveBeenCalledWith(btcCoin)
+    expect(getCoinBalanceMock).toHaveBeenCalledWith(btcCoin)
+  })
+
+  it('ignores includeUnconfirmed on non-UTXO chains', async () => {
+    getKeysignUtxoInfoMock.mockResolvedValue(undefined)
+    getChainSpecificMock.mockResolvedValue({
+      case: 'rippleSpecific',
+      value: create(RippleSpecificSchema, {
+        sequence: 1n,
+        gas: 15n,
+        lastLedgerSequence: 2n,
+      }),
+    })
+
+    await buildSendKeysignPayload({
+      coin: rippleCoin,
+      receiver: 'rDestinationBBBBBBBBBBBBBBBBBBBBBB',
+      amount: 1_000n,
+      vaultId: 'vault-public-key',
+      localPartyId: 'party-1',
+      publicKey: null,
+      hexPublicKeyOverride: `02${'ab'.repeat(32)}`,
+      libType: 'DKLS',
+      walletCore: {} as never,
+      includeUnconfirmed: true,
+    })
+
+    expect(getKeysignUtxoInfoMock).toHaveBeenCalledWith(rippleCoin)
+    expect(getCoinBalanceMock).toHaveBeenCalledWith(rippleCoin)
+  })
+})

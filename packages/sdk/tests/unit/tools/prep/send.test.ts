@@ -515,6 +515,17 @@ describe('prepareSendTxFromKeys', () => {
     expect(mockBuildSendKeysignPayload).toHaveBeenCalledWith(expect.objectContaining({ sendMaxAmount: true }))
   })
 
+  it('forwards includeUnconfirmed to the payload builder', async () => {
+    await prepareSendTxFromKeys(baseIdentity, {
+      coin: { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' },
+      receiver: 'bc1qrecipient',
+      amount: 10_000n,
+      includeUnconfirmed: true,
+    })
+
+    expect(mockBuildSendKeysignPayload).toHaveBeenCalledWith(expect.objectContaining({ includeUnconfirmed: true }))
+  })
+
   it('allows ERC-20 send to a different address (not the token contract)', async () => {
     const usdcContract = '0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48'
     const recipient = '0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045'

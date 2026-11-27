@@ -9,6 +9,7 @@ import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAd
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { attempt } from '@vultisig/lib-utils/attempt'
+import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
@@ -63,6 +64,12 @@ export type BuildSendKeysignPayloadInput = {
    * for an explicit user choice, with the reap disclosed; ignored elsewhere.
    */
   allowDeath?: boolean
+  /**
+   * UTXO chains only: include unconfirmed (mempool) outputs when fetching
+   * spendable UTXOs. Defaults to `false` (confirmed outputs only). Ignored on
+   * other chains (including Cardano).
+   */
+  includeUnconfirmed?: boolean
 }
 
 type AssertTonMemoFitsInput = {
@@ -119,6 +126,7 @@ export const buildSendKeysignPayload = async ({
   sendMaxAmount,
   tonGasless,
   allowDeath,
+  includeUnconfirmed,
 }: BuildSendKeysignPayloadInput) => {
   const hexPublicKey = hexPublicKeyOverride ?? (publicKey ? Buffer.from(publicKey.data()).toString('hex') : undefined)
   if (!hexPublicKey) {
@@ -186,6 +194,11 @@ export const buildSendKeysignPayload = async ({
   // carrier by the signing-input resolver.
   const keysignMemo = memo || (coin.chain === Chain.Ripple ? effectiveDestinationTag?.toString() : undefined)
 
+  const utxoInfo =
+    isChainOfKind(coin.chain, 'utxo') && includeUnconfirmed
+      ? await getKeysignUtxoInfo(coin, { includeUnconfirmed: true })
+      : await getKeysignUtxoInfo(coin)
+
   let keysignPayload = create(KeysignPayloadSchema, {
     coin: toCommCoin({
       ...coin,
@@ -197,7 +210,7 @@ export const buildSendKeysignPayload = async ({
     vaultLocalPartyId: localPartyId,
     vaultPublicKeyEcdsa: vaultId,
     libType,
-    utxoInfo: await getKeysignUtxoInfo(coin),
+    utxoInfo,
     contractPayload: cosmosWasmTokenTransferPayload
       ? {
           case: 'wasmExecuteContractPayload',
@@ -226,7 +239,10 @@ export const buildSendKeysignPayload = async ({
         ...(coin.chain === Chain.Ton && tonGasless ? { gasless: true } : {}),
       })
 
-  const balance = await getCoinBalance(coin)
+  const balance =
+    isChainOfKind(coin.chain, 'utxo') && includeUnconfirmed
+      ? bigIntSum(keysignPayload.utxoInfo.map(({ amount }) => amount))
+      : await getCoinBalance(coin)
 
   // Refinement reads the payload (balance, fee, UTXOs), never the WalletCore
   // key, so it runs on the `hexPublicKeyOverride` path too (#1390). Skipping it

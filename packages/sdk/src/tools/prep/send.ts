@@ -46,6 +46,12 @@ export type PrepareSendTxFromKeysParams = {
    * disclosed; ignored on other chains.
    */
   allowDeath?: boolean
+  /**
+   * UTXO chains only: include unconfirmed (mempool) outputs when fetching
+   * spendable UTXOs. Defaults to `false` (confirmed outputs only). Ignored on
+   * other chains (including Cardano).
+   */
+  includeUnconfirmed?: boolean
 }
 
 /**
@@ -168,5 +174,6 @@ export const prepareSendTxFromKeys = async (
     sendMaxAmount: params.sendMaxAmount,
     tonGasless: params.tonGasless,
     allowDeath: params.allowDeath,
+    includeUnconfirmed: params.includeUnconfirmed,
   })
 }
