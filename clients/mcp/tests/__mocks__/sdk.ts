@@ -1,15 +1,5 @@
-export const Chain = {
-  Ethereum: 'Ethereum',
-  Bitcoin: 'Bitcoin',
-  Solana: 'Solana',
-  THORChain: 'THORChain',
-  Avalanche: 'Avalanche',
-  BSC: 'BSC',
-  Polygon: 'Polygon',
-  Optimism: 'Optimism',
-  Arbitrum: 'Arbitrum',
-  Base: 'Base',
-} as any
+export { Chain } from '../../../../packages/core/chain/Chain'
+export { isChainOfKind } from '../../../../packages/core/chain/ChainKind'
 
 export class Vultisig {}
 export class MemoryStorage {}

@@ -130,6 +130,40 @@ describe('TransactionBuilder', () => {
       expect(buildSendKeysignPayload).not.toHaveBeenCalled()
     })
 
+    it('forwards selectedUtxos through prepareSendTx', async () => {
+      const selectedUtxos = [{ hash: 'aa'.repeat(32), index: 0, amount: 50_000n }]
+      vi.mocked(buildSendKeysignPayload).mockResolvedValueOnce({} as never)
+
+      await builder.prepareSendTx({
+        coin: { chain: Chain.Bitcoin, address: 'bc1qsender', ticker: 'BTC', decimals: 8 },
+        receiver: 'bc1qreceiver',
+        amount: 10_000n,
+        selectedUtxos,
+      })
+
+      expect(buildSendKeysignPayload).toHaveBeenCalledWith(expect.objectContaining({ selectedUtxos }))
+    })
+
+    it('surfaces utxo-selected-inputs-invalid as InvalidConfig', async () => {
+      const invalidUtxoError = new BuildKeysignPayloadError(
+        'utxo-selected-inputs-invalid',
+        'selectedUtxos must contain at least one UTXO'
+      )
+      vi.mocked(buildSendKeysignPayload).mockRejectedValueOnce(invalidUtxoError)
+
+      await expect(
+        builder.prepareSendTx({
+          coin: { chain: Chain.Bitcoin, address: 'bc1qsender', ticker: 'BTC', decimals: 8 },
+          receiver: 'bc1qreceiver',
+          amount: 10_000n,
+          selectedUtxos: [],
+        })
+      ).rejects.toMatchObject({
+        code: VaultErrorCode.InvalidConfig,
+        originalError: invalidUtxoError,
+      })
+    })
+
     it.each([
       ['utxo-dust-amount-requested', 'Amount 0.00001019 BTC is below the network dust threshold'],
       ['not-enough-funds', 'Failed to build transaction: insufficient balance'],
@@ -197,6 +231,21 @@ describe('TransactionBuilder', () => {
           sendMaxAmount: true,
         })
       )
+    })
+
+    it('should forward selectedUtxos through estimateSendFee', async () => {
+      const { getSendFeeEstimate } = await import('@vultisig/core-mpc/keysign/send/getSendFeeEstimate')
+      vi.mocked(getSendFeeEstimate).mockResolvedValue(420n)
+      const selectedUtxos = [{ hash: 'aa'.repeat(32), index: 0, amount: 25_000n }]
+
+      await builder.estimateSendFee({
+        coin: { chain: Chain.Bitcoin, address: 'bc1qsender', ticker: 'BTC', decimals: 8 },
+        receiver: 'bc1qreceiver',
+        amount: 10_000n,
+        selectedUtxos,
+      })
+
+      expect(getSendFeeEstimate).toHaveBeenCalledWith(expect.objectContaining({ selectedUtxos }))
     })
 
     it('should throw VaultError when estimation fails', async () => {

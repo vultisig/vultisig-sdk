@@ -5,8 +5,9 @@ import { getMaxValue } from '@vultisig/core-chain/amount/getMaxValue'
 import { toChainAmount } from '@vultisig/core-chain/amount/toChainAmount'
 import { banxaSupportedChains, getBanxaBuyUrl } from '@vultisig/core-chain/banxa'
 import { Chain, EvmChain } from '@vultisig/core-chain/Chain'
-import { getChainKind } from '@vultisig/core-chain/ChainKind'
+import { getChainKind, isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import type { TonWalletVersion } from '@vultisig/core-chain/chains/ton/wallet'
+import type { ChainPlainUtxo } from '@vultisig/core-chain/chains/utxo/tx/ChainPlainUtxo'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
 import { Coin } from '@vultisig/core-chain/coin/Coin'
@@ -27,12 +28,15 @@ import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import { vaultConfig } from '@vultisig/core-config'
 import { hasServer } from '@vultisig/core-mpc/devices/localPartyId'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
+import { BuildKeysignPayloadError } from '@vultisig/core-mpc/keysign/error'
+import { validateSelectedUtxos } from '@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo'
 import { fromCommVault } from '@vultisig/core-mpc/types/utils/commVault'
 import { KeysignPayload } from '@vultisig/core-mpc/types/vultisig/keysign/v1/keysign_message_pb'
 import { VaultSchema } from '@vultisig/core-mpc/types/vultisig/vault/v1/vault_pb'
 import { vaultContainerFromString } from '@vultisig/core-mpc/vault/utils/vaultContainerFromString'
 import { Vault as CoreVault } from '@vultisig/core-mpc/vault/Vault'
 import { isOneOf } from '@vultisig/lib-utils/array/isOneOf'
+import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 import { decryptVaultBackupWithPassword } from '@vultisig/lib-utils/encryption/vaultBackup/decryptVaultBackupWithPassword'
 import { fromBase64 } from '@vultisig/lib-utils/fromBase64'
 
@@ -1397,6 +1401,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     /** TON only: pay the fee in the jetton being sent through the gasless relay. */
     tonGasless?: boolean
     allowDeath?: boolean
+    /** UTXO chains only: optional candidate pool of UTXOs to select inputs from (coin control). */
+    selectedUtxos?: readonly ChainPlainUtxo[]
   }): Promise<KeysignPayload> {
     return this.transactionBuilder.prepareSendTx(params)
   }
@@ -1424,6 +1430,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     /** TON only: pay the fee in the jetton being sent through the gasless relay. */
     tonGasless?: boolean
     allowDeath?: boolean
+    /** UTXO chains only: optional candidate pool of UTXOs to select inputs from (coin control). */
+    selectedUtxos?: readonly ChainPlainUtxo[]
   }): Promise<SendFeeEstimate> {
     // Normalize once so the fee asset sees the same coin as the estimate (a jetton given by contractAddress).
     const normalized = { ...params, coin: normalizeAccountCoin(params.coin) }
@@ -1489,6 +1497,8 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     /** TON only: the relay commission is deducted from the jetton balance being sent. */
     tonGasless?: boolean
     allowDeath?: boolean
+    /** UTXO chains only: compute max send strictly over this candidate UTXO pool. */
+    selectedUtxos?: readonly ChainPlainUtxo[]
   }): Promise<MaxSendAmount> {
     const params = { ...rawParams, coin: normalizeAccountCoin(rawParams.coin) }
     const walletCore = await this.wasmProvider.getWalletCore()
@@ -1508,6 +1518,25 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
           `Invalid receiver address for chain ${params.coin.chain}: ${params.receiver}`,
           params.receiver
         )
+      )
+    }
+    if (isChainOfKind(params.coin.chain, 'utxo') && params.selectedUtxos !== undefined) {
+      let validated: ChainPlainUtxo[]
+      try {
+        validated = validateSelectedUtxos(params.selectedUtxos)
+      } catch (error) {
+        if (error instanceof BuildKeysignPayloadError) {
+          throw new VaultError(VaultErrorCode.InvalidConfig, error.message, error)
+        }
+        throw error
+      }
+      return computeMaxSendFromBalance(
+        vaultDataToIdentity(this.coreVault),
+        {
+          ...params,
+          balance: bigIntSum(validated.map(({ amount }) => amount)),
+        },
+        walletCore
       )
     }
     // Fetch balance via BalanceService so cache / balanceUpdated event / VaultError
@@ -2192,15 +2221,26 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
     allowDeath?: boolean
     dryRun?: boolean
     gasless?: boolean
+    /** UTXO chains only: optional candidate pool of UTXOs to select inputs from (coin control). */
+    selectedUtxos?: readonly ChainPlainUtxo[]
   }): Promise<SendResult> {
-    const { chain, to, amount, symbol, memo, destinationTag, allowDeath, dryRun, gasless } = params
+    const { chain, to, amount, symbol, memo, destinationTag, allowDeath, dryRun, gasless, selectedUtxos } = params
     const tokenInfo = this.resolveTokenInfo(chain, symbol)
     const coin = this.buildAccountCoin(chain, await this.address(chain), tokenInfo)
     const tonGasless = chain === Chain.Ton && Boolean(tokenInfo.contractAddress) && gasless === true
+    const selectedUtxosOption = selectedUtxos !== undefined ? { selectedUtxos } : {}
 
     let amountBigInt: bigint
     if (amount === 'max') {
-      const maxInfo = await this.getMaxSendAmount({ coin, receiver: to, memo, destinationTag, tonGasless, allowDeath })
+      const maxInfo = await this.getMaxSendAmount({
+        coin,
+        receiver: to,
+        memo,
+        destinationTag,
+        tonGasless,
+        allowDeath,
+        ...selectedUtxosOption,
+      })
       if (maxInfo.maxSendable <= 0n)
         throw new VaultError(VaultErrorCode.InvalidAmount, 'Insufficient balance to cover network fees')
       amountBigInt = maxInfo.maxSendable
@@ -2219,6 +2259,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
       sendMaxAmount: amount === 'max',
       tonGasless,
       allowDeath,
+      ...selectedUtxosOption,
     })
 
     if (dryRun) {
@@ -2231,6 +2272,7 @@ export abstract class VaultBase extends UniversalEventEmitter<VaultEvents> {
         sendMaxAmount: amount === 'max',
         tonGasless,
         allowDeath,
+        ...selectedUtxosOption,
       })
       // The network fee is paid in the chain's native asset, never in the token
       // being sent — except for a relayed TON send, whose commission is charged

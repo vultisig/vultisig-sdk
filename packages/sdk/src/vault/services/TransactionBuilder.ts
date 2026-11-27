@@ -1,5 +1,6 @@
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
+import type { ChainPlainUtxo } from '@vultisig/core-chain/chains/utxo/tx/ChainPlainUtxo'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinType } from '@vultisig/core-chain/coin/coinType'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
@@ -84,6 +85,8 @@ export class TransactionBuilder {
    *   (Polkadot, Bittensor): the chain reaps the sender once its balance drops below
    *   the existential deposit. Only for an explicit user choice, with the reap
    *   disclosed; ignored on other chains.
+   * @param params.selectedUtxos - UTXO chains only: optional candidate pool of UTXOs to
+   *   select inputs from (coin control). Omit for default selection; ignored elsewhere.
    *
    * @returns A KeysignPayload ready to be signed with the sign() method
    *
@@ -112,6 +115,7 @@ export class TransactionBuilder {
     sendMaxAmount?: boolean
     tonGasless?: boolean
     allowDeath?: boolean
+    selectedUtxos?: readonly ChainPlainUtxo[]
   }): Promise<KeysignPayload> {
     if (params.amount <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
@@ -160,6 +164,7 @@ export class TransactionBuilder {
     sendMaxAmount?: boolean
     tonGasless?: boolean
     allowDeath?: boolean
+    selectedUtxos?: readonly ChainPlainUtxo[]
   }): Promise<bigint> {
     const params = { ...rawParams, coin: normalizeAccountCoin(rawParams.coin) }
     try {
@@ -213,6 +218,7 @@ export class TransactionBuilder {
         sendMaxAmount: params.sendMaxAmount,
         tonGasless: params.tonGasless,
         allowDeath: params.allowDeath,
+        selectedUtxos: params.selectedUtxos,
       })
     } catch (error) {
       if (error instanceof VaultError) throw error

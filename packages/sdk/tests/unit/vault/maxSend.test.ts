@@ -122,4 +122,63 @@ describe('VaultBase.getMaxSendAmount', () => {
     expect(getBalance).not.toHaveBeenCalled()
     expect(mockGetSendFeeEstimate).not.toHaveBeenCalled()
   })
+
+  it('computes Bitcoin max-send strictly from selectedUtxos without reading cached balance', async () => {
+    const getBalance = vi.fn()
+    const selectedUtxos = [
+      { hash: 'aa'.repeat(32), index: 0, amount: 50_000_000n },
+      { hash: 'bb'.repeat(32), index: 1, amount: 10_000_000n },
+    ]
+    mockGetSendFeeEstimate.mockResolvedValue(2_000n)
+
+    const vault = Object.create(VaultBase.prototype) as VaultBase
+    Object.assign(vault as object, {
+      wasmProvider: { getWalletCore: vi.fn().mockResolvedValue({ __mock: 'walletCore' }) },
+      balanceService: { getBalance },
+      coreVault: {
+        publicKeys: { ecdsa: '02ecdsa-public-key', eddsa: 'eddsa-public-key' },
+        hexChainCode: 'deadbeef',
+        localPartyId: 'iPhone-A1B2',
+        libType: 'DKLS',
+      },
+    })
+
+    const result = await vault.getMaxSendAmount({
+      coin: { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' },
+      receiver: 'bc1qreceiver',
+      selectedUtxos,
+    })
+
+    expect(getBalance).not.toHaveBeenCalled()
+    expect(mockGetSendFeeEstimate).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 60_000_000n, sendMaxAmount: true, selectedUtxos })
+    )
+    expect(result).toEqual({ balance: 60_000_000n, fee: 2_000n, maxSendable: 59_998_000n })
+  })
+
+  it('rejects invalid selectedUtxos as INVALID_CONFIG before fetching balance or fee', async () => {
+    const getBalance = vi.fn()
+    const vault = Object.create(VaultBase.prototype) as VaultBase
+    Object.assign(vault as object, {
+      wasmProvider: { getWalletCore: vi.fn().mockResolvedValue({ __mock: 'walletCore' }) },
+      balanceService: { getBalance },
+      coreVault: {
+        publicKeys: { ecdsa: '02ecdsa-public-key', eddsa: 'eddsa-public-key' },
+        hexChainCode: 'deadbeef',
+        localPartyId: 'iPhone-A1B2',
+        libType: 'DKLS',
+      },
+    })
+
+    await expect(
+      vault.getMaxSendAmount({
+        coin: { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' },
+        receiver: 'bc1qreceiver',
+        selectedUtxos: [],
+      })
+    ).rejects.toMatchObject({ code: 'INVALID_CONFIG' })
+
+    expect(getBalance).not.toHaveBeenCalled()
+    expect(mockGetSendFeeEstimate).not.toHaveBeenCalled()
+  })
 })

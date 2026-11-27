@@ -15,7 +15,7 @@ export type { AddTokenOptions, TokensOptions } from './tokens'
 export { addToken, discoverTokens, executeTokens, listTokens, removeToken } from './tokens'
 
 // Transaction commands
-export { executeSend, sendTransaction } from './transaction'
+export { executeSend, parseUtxoSpecs, sendTransaction } from './transaction'
 
 // Unsigned transaction-preparation commands
 export type {

@@ -22,6 +22,7 @@ import type {
   SaveFileOptions,
   SeedphraseValidation,
   SelectedFile,
+  SelectedUtxoInput,
   SelectFilesOptions,
   SelectFilesResult,
   SendTxParams,
@@ -105,7 +106,12 @@ export type ISDKAdapter = {
 
   getMaxSendAmount(
     vaultId: string,
-    params: { coin: CoinInfo; receiver: string; memo?: string }
+    params: {
+      coin: CoinInfo
+      receiver: string
+      memo?: string
+      selectedUtxos?: SelectedUtxoInput[]
+    }
   ): Promise<MaxSendAmountResult>
 
   extractMessageHashes(vaultId: string, keysignPayload: unknown): Promise<string[]>

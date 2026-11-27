@@ -1,8 +1,53 @@
 import { descriptions } from '@vultisig/client-shared'
-import { resolveChainReference } from '@vultisig/sdk'
+import { Chain, isChainOfKind, resolveChainReference } from '@vultisig/sdk'
 import * as z from 'zod/v4'
 
-import type { Vault } from './types.js'
+import type { SelectedUtxo, Vault } from './types.js'
+
+const UTXO_HASH_RE = /^[0-9a-f]{64}$/i
+const MAX_UINT32 = 0xffffffff
+const MAX_INT64 = 0x7fffffffffffffffn
+
+function parseSelectedUtxosArg(
+  chain: string,
+  raw: Array<{ hash: string; index: number; amount: string }> | undefined
+): SelectedUtxo[] | undefined {
+  if (raw === undefined) return undefined
+  if (!Object.values(Chain).includes(chain as Chain) || !isChainOfKind(chain as Chain, 'utxo')) {
+    throw new Error('selectedUtxos is only supported for UTXO chains')
+  }
+  if (raw.length === 0) {
+    throw new Error('selectedUtxos must contain at least one UTXO')
+  }
+  const seen = new Set<string>()
+  return raw.map((entry, idx) => {
+    if (typeof entry.hash !== 'string' || !UTXO_HASH_RE.test(entry.hash)) {
+      throw new Error(`Invalid selectedUtxos[${idx}].hash: expected a 64-character hex txid`)
+    }
+    if (
+      typeof entry.index !== 'number' ||
+      !Number.isInteger(entry.index) ||
+      entry.index < 0 ||
+      entry.index > MAX_UINT32
+    ) {
+      throw new Error(`Invalid selectedUtxos[${idx}].index: expected a uint32 integer`)
+    }
+    if (typeof entry.amount !== 'string' || !/^[1-9]\d*$/.test(entry.amount)) {
+      throw new Error(`Invalid selectedUtxos[${idx}].amount: expected a positive base-10 integer string`)
+    }
+    const amount = BigInt(entry.amount)
+    if (amount > MAX_INT64) {
+      throw new Error(`Invalid selectedUtxos[${idx}].amount: exceeds int64 range`)
+    }
+    const hash = entry.hash.toLowerCase()
+    const outpoint = `${hash}:${entry.index}`
+    if (seen.has(outpoint)) {
+      throw new Error(`Duplicate outpoint in selectedUtxos: ${outpoint}`)
+    }
+    seen.add(outpoint)
+    return { hash, index: entry.index, amount }
+  })
+}
 
 type ToolResult = {
   [key: string]: unknown
@@ -144,17 +189,36 @@ export function getTools(vault: Vault, profile: Profile = 'defi'): Record<string
         amount: z.string().describe(descriptions.send.params.amount),
         token: z.string().optional().describe(descriptions.send.params.token),
         memo: z.string().optional().describe(descriptions.send.params.memo),
+        selectedUtxos: z
+          .array(
+            z.object({
+              hash: z.string().regex(UTXO_HASH_RE).describe('Transaction ID (64-character hex)'),
+              index: z.number().int().min(0).max(MAX_UINT32).describe('Output index (vout)'),
+              amount: z
+                .string()
+                .regex(/^[1-9]\d*$/)
+                .describe('Output amount in base units (satoshis) as a base-10 integer string'),
+            })
+          )
+          .min(1)
+          .optional()
+          .describe(descriptions.send.params.selectedUtxos),
         confirmed: z.boolean().optional().describe(descriptions.send.params.confirmed),
       }),
       handler: args =>
         wrapHandler(async () => {
           const chain = resolveChain(args.chain as string, knownChains)
+          const selectedUtxos = parseSelectedUtxosArg(
+            chain,
+            args.selectedUtxos as Array<{ hash: string; index: number; amount: string }> | undefined
+          )
           return vault.send({
             chain,
             to: args.to as string,
             amount: args.amount as string,
             symbol: args.token as string | undefined,
             memo: args.memo as string | undefined,
+            ...(selectedUtxos !== undefined ? { selectedUtxos } : {}),
             dryRun: args.confirmed !== true,
           })
         }),

@@ -5,16 +5,18 @@ import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { normalizeRippleDestination } from '@vultisig/core-chain/chains/ripple/address'
 import { getSignableIssuedCurrencyAmount, parseRippleTokenId } from '@vultisig/core-chain/chains/ripple/issuedCurrency'
 import { validateTonComment } from '@vultisig/core-chain/chains/ton/comment'
+import type { ChainPlainUtxo } from '@vultisig/core-chain/chains/utxo/tx/ChainPlainUtxo'
 import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
 import { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { attempt } from '@vultisig/lib-utils/attempt'
+import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 import { isFeeCoin } from '@vultisig/core-chain/coin/utils/isFeeCoin'
 import { getChainSpecific } from '@vultisig/core-mpc/keysign/chainSpecific'
 import { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { refineKeysignAmount } from '@vultisig/core-mpc/keysign/refine/amount'
 import { refineKeysignUtxo } from '@vultisig/core-mpc/keysign/refine/utxo'
-import { getKeysignUtxoInfo } from '@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo'
+import { getKeysignUtxoInfo, toSelectedUtxoInfo } from '@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo'
 import { KeysignLibType } from '@vultisig/core-mpc/mpcLib'
 import { toCommCoin } from '@vultisig/core-mpc/types/utils/commCoin'
 import { TransactionType } from '@vultisig/core-mpc/types/vultisig/keysign/v1/blockchain_specific_pb'
@@ -63,6 +65,16 @@ export type BuildSendKeysignPayloadInput = {
    * for an explicit user choice, with the reap disclosed; ignored elsewhere.
    */
   allowDeath?: boolean
+  /**
+   * UTXO chains only (Bitcoin, BitcoinCash, Litecoin, Dogecoin, Dash, Zcash):
+   * optional candidate pool of UTXOs to select inputs from (coin control).
+   *
+   * When omitted, all fetched address UTXOs are eligible as before. When
+   * provided, on-chain UTXO and balance fetches are skipped and WalletCore plans
+   * strictly within this candidate pool (without forcing spend-all unless
+   * `sendMaxAmount` is set). Ignored on non-UTXO chains (including Cardano).
+   */
+  selectedUtxos?: readonly ChainPlainUtxo[]
 }
 
 type AssertTonMemoFitsInput = {
@@ -119,6 +131,7 @@ export const buildSendKeysignPayload = async ({
   sendMaxAmount,
   tonGasless,
   allowDeath,
+  selectedUtxos,
 }: BuildSendKeysignPayloadInput) => {
   const hexPublicKey = hexPublicKeyOverride ?? (publicKey ? Buffer.from(publicKey.data()).toString('hex') : undefined)
   if (!hexPublicKey) {
@@ -186,6 +199,9 @@ export const buildSendKeysignPayload = async ({
   // carrier by the signing-input resolver.
   const keysignMemo = memo || (coin.chain === Chain.Ripple ? effectiveDestinationTag?.toString() : undefined)
 
+  const useSelectedUtxos = isChainOfKind(coin.chain, 'utxo') && selectedUtxos !== undefined
+  const utxoInfo = useSelectedUtxos ? toSelectedUtxoInfo(selectedUtxos) : await getKeysignUtxoInfo(coin)
+
   let keysignPayload = create(KeysignPayloadSchema, {
     coin: toCommCoin({
       ...coin,
@@ -197,7 +213,7 @@ export const buildSendKeysignPayload = async ({
     vaultLocalPartyId: localPartyId,
     vaultPublicKeyEcdsa: vaultId,
     libType,
-    utxoInfo: await getKeysignUtxoInfo(coin),
+    utxoInfo,
     contractPayload: cosmosWasmTokenTransferPayload
       ? {
           case: 'wasmExecuteContractPayload',
@@ -226,7 +242,9 @@ export const buildSendKeysignPayload = async ({
         ...(coin.chain === Chain.Ton && tonGasless ? { gasless: true } : {}),
       })
 
-  const balance = await getCoinBalance(coin)
+  const balance = useSelectedUtxos
+    ? bigIntSum(keysignPayload.utxoInfo.map(({ amount }) => amount))
+    : await getCoinBalance(coin)
 
   // Refinement reads the payload (balance, fee, UTXOs), never the WalletCore
   // key, so it runs on the `hexPublicKeyOverride` path too (#1390). Skipping it

@@ -191,6 +191,9 @@ export { assertUtxoAddressBrand, isUtxoAddressBrandValid } from './chains/utxo/a
 // Consumers should import this instead of reconstructing the path locally.
 export { getBlockchairBaseUrl } from '@vultisig/core-chain/chains/utxo/client/getBlockchairBaseUrl'
 
+// Plain UTXO outpoint descriptor for opt-in candidate-pool coin control (`selectedUtxos`).
+export type { ChainPlainUtxo } from '@vultisig/core-chain/chains/utxo/tx/ChainPlainUtxo'
+
 // Pure QBTC address derivation from an ML-DSA public key. Exported so consumers
 // do not need to deep-import the canonical core-chain implementation.
 export { deriveQbtcAddress } from '@vultisig/core-chain/publicKey/address/deriveQbtcAddress'

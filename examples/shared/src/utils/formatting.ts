@@ -1,4 +1,6 @@
-import { type Chain, chainFeeCoin } from '@vultisig/sdk'
+import { Chain, chainFeeCoin, isChainOfKind } from '@vultisig/sdk'
+
+import type { SelectedUtxoInput } from '../types'
 
 /**
  * Shorten an address for display
@@ -74,6 +76,85 @@ export function getChainNativeTicker(chain: string): string {
  */
 export function getChainNativeDecimals(chain: string): number {
   return chainFeeCoin[chain as Chain]?.decimals ?? 18
+}
+
+/**
+ * Returns true when `chain` is one of the SDK's canonical UTXO chains
+ * (Bitcoin, Bitcoin-Cash, Litecoin, Dogecoin, Dash, Zcash).
+ */
+export function isUtxoChain(chain: string): boolean {
+  return Object.values(Chain).includes(chain as Chain) && isChainOfKind(chain as Chain, 'utxo')
+}
+
+export type ParsedSelectedUtxos =
+  | { ok: true; utxos: SelectedUtxoInput[]; totalAmount: bigint }
+  | { ok: false; message: string }
+
+/**
+ * Parse newline-delimited `txid:vout:satoshis` candidate UTXOs entered in the
+ * send form.
+ */
+export function parseSelectedUtxosInput(raw: string): ParsedSelectedUtxos {
+  const lines = raw
+    .split(/\r?\n/)
+    .map(line => line.trim())
+    .filter(Boolean)
+
+  if (lines.length === 0) {
+    return {
+      ok: false,
+      message: 'Enter at least one UTXO in txid:vout:satoshis format.',
+    }
+  }
+
+  const seen = new Set<string>()
+  const utxos: SelectedUtxoInput[] = []
+  let totalAmount = 0n
+
+  for (let i = 0; i < lines.length; i++) {
+    const lineNum = i + 1
+    const segments = lines[i].split(':')
+    if (segments.length !== 3) {
+      return {
+        ok: false,
+        message: `Line ${lineNum}: expected txid:vout:satoshis.`,
+      }
+    }
+    const [txidRaw, voutRaw, satsRaw] = segments
+    if (!/^[0-9a-f]{64}$/i.test(txidRaw)) {
+      return {
+        ok: false,
+        message: `Line ${lineNum}: txid must be 64 hex characters.`,
+      }
+    }
+    if (!/^(0|[1-9]\d*)$/.test(voutRaw) || Number(voutRaw) > 0xffffffff) {
+      return {
+        ok: false,
+        message: `Line ${lineNum}: vout must be a uint32 integer.`,
+      }
+    }
+    if (!/^[1-9]\d*$/.test(satsRaw) || BigInt(satsRaw) > 0x7fffffffffffffffn) {
+      return {
+        ok: false,
+        message: `Line ${lineNum}: satoshis must be a positive integer.`,
+      }
+    }
+
+    const hash = txidRaw.toLowerCase()
+    const index = Number(voutRaw)
+    const outpoint = `${hash}:${index}`
+    if (seen.has(outpoint)) {
+      return {
+        ok: false,
+        message: `Line ${lineNum}: duplicate outpoint ${outpoint}.`,
+      }
+    }
+    seen.add(outpoint)
+    utxos.push({ hash, index, amount: satsRaw })
+    totalAmount += BigInt(satsRaw)
+  }
+
+  return { ok: true, utxos, totalAmount }
 }
 
 /**

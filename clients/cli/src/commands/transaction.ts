@@ -2,13 +2,13 @@
  * Transaction Commands - thin wrapper around vault.send()
  */
 import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
-import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
-import { Chain, normalizeRippleDestination, Vultisig } from '@vultisig/sdk'
+import type { ChainPlainUtxo, KeysignPayload, VaultBase } from '@vultisig/sdk'
+import { Chain, chainFeeCoin, isChainOfKind, normalizeRippleDestination, Vultisig } from '@vultisig/sdk'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
-import { ConfirmationRequiredError } from '../core/errors'
+import { ConfirmationRequiredError, InvalidInputError } from '../core/errors'
 import {
   createSpinner,
   info,
@@ -59,6 +59,54 @@ const getSendPreviewDetails = (
 const reapDisclosure =
   'This send empties the account: it is signed as transfer_allow_death, the chain reaps it, and anything left below the existential deposit is destroyed'
 
+const utxoSpecHashPattern = /^[0-9a-f]{64}$/i
+const maxUint32 = 0xffffffff
+const maxInt64 = 0x7fffffffffffffffn
+
+/** Parse a single `--utxo <txid>:<vout>:<satoshis>` flag value. */
+export function parseUtxoSpec(raw: string): ChainPlainUtxo {
+  const parts = raw.trim().split(':')
+  if (parts.length !== 3) {
+    throw new InvalidInputError(`Invalid --utxo "${raw}": expected <txid>:<vout>:<satoshis>`)
+  }
+  const [rawHash, rawIndex, rawAmount] = parts
+  if (!utxoSpecHashPattern.test(rawHash)) {
+    throw new InvalidInputError(`Invalid --utxo "${raw}": txid must be a 64-character hex string`)
+  }
+  if (!/^(0|[1-9]\d*)$/.test(rawIndex)) {
+    throw new InvalidInputError(`Invalid --utxo "${raw}": vout must be a non-negative integer`)
+  }
+  const index = Number(rawIndex)
+  if (!Number.isSafeInteger(index) || index > maxUint32) {
+    throw new InvalidInputError(`Invalid --utxo "${raw}": vout must be a uint32 integer`)
+  }
+  if (!/^[1-9]\d*$/.test(rawAmount)) {
+    throw new InvalidInputError(`Invalid --utxo "${raw}": satoshis must be a positive base-10 integer`)
+  }
+  const amount = BigInt(rawAmount)
+  if (amount > maxInt64) {
+    throw new InvalidInputError(`Invalid --utxo "${raw}": satoshis exceeds int64 range`)
+  }
+  return { hash: rawHash.toLowerCase(), index, amount }
+}
+
+/** Parse and deduplicate one or more `--utxo <txid>:<vout>:<satoshis>` values. */
+export function parseUtxoSpecs(specs: readonly string[]): ChainPlainUtxo[] {
+  if (specs.length === 0) {
+    throw new InvalidInputError('--utxo requires at least one <txid>:<vout>:<satoshis> entry')
+  }
+  const seen = new Set<string>()
+  return specs.map(spec => {
+    const parsed = parseUtxoSpec(spec)
+    const key = `${parsed.hash}:${parsed.index}`
+    if (seen.has(key)) {
+      throw new InvalidInputError(`Duplicate --utxo outpoint: ${key}`)
+    }
+    seen.add(key)
+    return parsed
+  })
+}
+
 /**
  * Execute send command - send tokens to an address
  */
@@ -70,6 +118,15 @@ export async function executeSend(
 
   if (!Object.values(Chain).includes(params.chain)) {
     throw new Error(`Invalid chain: ${params.chain}`)
+  }
+
+  if (params.selectedUtxos !== undefined) {
+    if (!isChainOfKind(params.chain, 'utxo')) {
+      throw new InvalidInputError('--utxo is only supported for UTXO chains')
+    }
+    if (params.selectedUtxos.length === 0) {
+      throw new InvalidInputError('--utxo requires at least one UTXO')
+    }
   }
 
   const isMax = params.amount === 'max'
@@ -99,8 +156,22 @@ async function previewDryRun(
   },
   to: string
 ): Promise<SendDryRunResult> {
-  const balance = await vault.balance(params.chain, params.tokenId)
-  const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
+  // When coin control restricts the candidate pool, skip the confirmed-balance
+  // read and derive coin metadata from the prepared payload so balance-provider
+  // outages cannot block `--utxo` previews.
+  const balance = params.selectedUtxos === undefined ? await vault.balance(params.chain, params.tokenId) : undefined
+  const preparedCoin = dryResult.keysignPayload.coin
+  const fallbackCoin = chainFeeCoin[params.chain]
+  const coinDecimals = balance?.decimals ?? preparedCoin?.decimals ?? fallbackCoin.decimals
+  const coinSymbol = balance?.symbol ?? (preparedCoin?.ticker || dryResult.feeSymbol || fallbackCoin.ticker)
+  const availableBalance =
+    params.selectedUtxos !== undefined
+      ? formatBigintAmount(
+          params.selectedUtxos.reduce((sum, utxo) => sum + utxo.amount, 0n),
+          coinDecimals
+        )
+      : balance!.formattedAmount
+  const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(availableBalance)
   const { memo: previewMemo, destinationTag: payloadDestinationTag } = getSendPreviewDetails(
     params.chain,
     dryResult.keysignPayload
@@ -117,7 +188,7 @@ async function previewDryRun(
   // balance checked for gas it cannot pay. A native send needs no separate
   // check at all — `total` already includes the fee, and running one would
   // just report the same shortfall twice.
-  const isTokenSend = balance.tokenId !== undefined
+  const isTokenSend = balance?.tokenId !== undefined
   // Max token sends are already gated by the SDK's native-balance check while
   // calculating the max amount. Keep this preview check for explicit token
   // amounts, but do not repeat the same balance read for max sends. A gasless
@@ -131,7 +202,7 @@ async function previewDryRun(
     warnings.push(reapDisclosure)
   }
   if (hasInsufficientBalance) {
-    warnings.push(`Insufficient balance: you have ${balance.formattedAmount} ${balance.symbol}`)
+    warnings.push(`Insufficient balance: you have ${availableBalance} ${coinSymbol}`)
   }
   if (shouldCheckNativeFeeBalance && feeBalance === undefined) {
     // The gas check needs a second balance read, and it failed. Say so rather
@@ -152,14 +223,15 @@ async function previewDryRun(
     chain: params.chain,
     to,
     amount: params.amount,
-    symbol: balance.symbol,
+    symbol: coinSymbol,
     ...(dryResult.contractAddress ? { contractAddress: dryResult.contractAddress } : {}),
     fee: dryResult.fee,
     feeSymbol: dryResult.feeSymbol,
     total: dryResult.total,
-    balance: balance.formattedAmount,
+    balance: availableBalance,
     destinationTag: payloadDestinationTag,
     ...(previewMemo ? { memo: previewMemo } : {}),
+    ...(params.selectedUtxos ? { selectedUtxoCount: params.selectedUtxos.length } : {}),
     ...(warnings.length > 0 ? { warning: warnings.join('. ') } : {}),
   }
 
@@ -191,6 +263,7 @@ async function previewDryRun(
   info(`  Fee:     ${result.fee} ${result.feeSymbol}`)
   info(`  Total:   ${result.total} ${result.symbol}`)
   info(`  Balance: ${result.balance} ${result.symbol}`)
+  if (result.selectedUtxoCount !== undefined) info(`  UTXOs:   ${result.selectedUtxoCount} selected`)
   if (result.warning) warn(`  Warning: ${result.warning}`)
   return result
 }
@@ -238,6 +311,7 @@ export async function sendTransaction(
     destinationTag,
     gasless: params.gasless,
     allowDeath: params.allowDeath,
+    ...(params.selectedUtxos !== undefined ? { selectedUtxos: params.selectedUtxos } : {}),
     dryRun: true,
   })
 
@@ -258,7 +332,10 @@ export async function sendTransaction(
     warn('\nGas estimation unavailable')
   }
 
-  const balance = await vault.balance(params.chain, params.tokenId)
+  const balance = params.selectedUtxos === undefined ? await vault.balance(params.chain, params.tokenId) : undefined
+  const previewSymbol =
+    balance?.symbol ??
+    (dryResult.keysignPayload.coin?.ticker || dryResult.feeSymbol || chainFeeCoin[params.chain].ticker)
   if (!isJsonOutput()) {
     const address = await vault.address(params.chain)
     const preview = getSendPreviewDetails(params.chain, dryResult.keysignPayload)
@@ -266,7 +343,7 @@ export async function sendTransaction(
       address,
       to,
       dryResult.total,
-      balance.symbol,
+      previewSymbol,
       params.chain,
       preview.memo,
       preview.destinationTag,
@@ -357,6 +434,7 @@ export async function sendTransaction(
         destinationTag,
         gasless: params.gasless,
         allowDeath: params.allowDeath,
+        ...(params.selectedUtxos !== undefined ? { selectedUtxos: params.selectedUtxos } : {}),
       })
       if (result.dryRun) throw new Error('unreachable')
       return result as Extract<typeof result, { dryRun: false }>

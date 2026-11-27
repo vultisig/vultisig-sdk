@@ -17,6 +17,7 @@ import type {
   MaxSendAmountResult,
   PrepareSwapParams,
   SeedphraseValidation,
+  SelectedUtxoInput,
   SendTxParams,
   SwapQuoteResult,
   SwapResult,
@@ -490,12 +491,22 @@ export class BrowserSDKAdapter extends SDKAdapterEventSubscriptionBase implement
       receiver: params.receiver,
       amount: typeof params.amount === 'string' ? BigInt(params.amount) : params.amount,
       memo: params.memo,
+      selectedUtxos: params.selectedUtxos?.map(utxo => ({
+        hash: utxo.hash,
+        index: utxo.index,
+        amount: BigInt(utxo.amount),
+      })),
     })
   }
 
   async getMaxSendAmount(
     vaultId: string,
-    params: { coin: CoinInfo; receiver: string; memo?: string }
+    params: {
+      coin: CoinInfo
+      receiver: string
+      memo?: string
+      selectedUtxos?: SelectedUtxoInput[]
+    }
   ): Promise<MaxSendAmountResult> {
     const vault = await this.getVault(vaultId)
     const result = await vault.getMaxSendAmount({
@@ -508,6 +519,11 @@ export class BrowserSDKAdapter extends SDKAdapterEventSubscriptionBase implement
       },
       receiver: params.receiver,
       memo: params.memo,
+      selectedUtxos: params.selectedUtxos?.map(utxo => ({
+        hash: utxo.hash,
+        index: utxo.index,
+        amount: BigInt(utxo.amount),
+      })),
     })
     return {
       balance: result.balance.toString(),

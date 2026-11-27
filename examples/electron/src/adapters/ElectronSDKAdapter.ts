@@ -19,6 +19,7 @@ import type {
   PrepareSwapParams,
   ProgressStep,
   SeedphraseValidation,
+  SelectedUtxoInput,
   SendTxParams,
   SwapQuoteResult,
   SwapResult,
@@ -125,7 +126,13 @@ declare global {
       // Transactions
       prepareSendTx(
         vaultId: string,
-        params: { coin: unknown; receiver: string; amount: string; memo?: string }
+        params: {
+          coin: unknown
+          receiver: string
+          amount: string
+          memo?: string
+          selectedUtxos?: SelectedUtxoInput[]
+        }
       ): Promise<unknown>
       getMaxSendAmount(vaultId: string, params: unknown): Promise<MaxSendAmountResult>
       extractMessageHashes(vaultId: string, keysignPayload: unknown): Promise<string[]>
@@ -431,12 +438,18 @@ export class ElectronSDKAdapter extends SDKAdapterEventSubscriptionBase implemen
       receiver: params.receiver,
       amount: String(params.amount),
       memo: params.memo,
+      selectedUtxos: params.selectedUtxos,
     })
   }
 
   async getMaxSendAmount(
     vaultId: string,
-    params: { coin: CoinInfo; receiver: string; memo?: string }
+    params: {
+      coin: CoinInfo
+      receiver: string
+      memo?: string
+      selectedUtxos?: SelectedUtxoInput[]
+    }
   ): Promise<MaxSendAmountResult> {
     return window.electronAPI.getMaxSendAmount(vaultId, params)
   }

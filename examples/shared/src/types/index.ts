@@ -189,11 +189,19 @@ export type CoinInfo = {
   id?: string
 }
 
+export type SelectedUtxoInput = {
+  hash: string
+  index: number
+  /** Output amount in base units (satoshis) serialized as a base-10 string for IPC safety. */
+  amount: string
+}
+
 export type SendTxParams = {
   coin: CoinInfo
   receiver: string
   amount: string | bigint
   memo?: string
+  selectedUtxos?: SelectedUtxoInput[]
 }
 
 export type BroadcastParams = {

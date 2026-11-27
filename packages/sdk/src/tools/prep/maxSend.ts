@@ -1,9 +1,11 @@
 import type { WalletCore } from '@trustwallet/wallet-core'
 import { getMaxSendableAmount } from '@vultisig/core-chain/amount/getMaxSendableAmount'
 import { Chain } from '@vultisig/core-chain/Chain'
+import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { isTerraClassicUstcCoin } from '@vultisig/core-chain/chains/cosmos/terraClassicTax'
 import { getNearMaxSendable } from '@vultisig/core-chain/chains/near/fees'
 import { getNearSendLimits } from '@vultisig/core-chain/chains/near/sendLimits'
+import type { ChainPlainUtxo } from '@vultisig/core-chain/chains/utxo/tx/ChainPlainUtxo'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getCoinBalance } from '@vultisig/core-chain/coin/balance'
 import { chainFeeCoin } from '@vultisig/core-chain/coin/chainFeeCoin'
@@ -13,7 +15,9 @@ import { withEvmChecksumHint } from '@vultisig/core-chain/utils/getEvmChecksumMi
 import { isValidRecipient } from '@vultisig/core-chain/utils/isValidRecipient'
 import type { FeeSettings } from '@vultisig/core-mpc/keysign/chainSpecific/FeeSettings'
 import { getSendFeeEstimate } from '@vultisig/core-mpc/keysign/send/getSendFeeEstimate'
+import { validateSelectedUtxos } from '@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo'
 import { shouldBePresent } from '@vultisig/lib-utils/assert/shouldBePresent'
+import { bigIntSum } from '@vultisig/lib-utils/bigint/bigIntSum'
 
 import { getWalletCore } from '../../context/wasmRuntime'
 import type { MaxSendAmount } from '../../types'
@@ -34,6 +38,11 @@ export type GetMaxSendAmountFromKeysParams = {
    * Ignored on other chains.
    */
   allowDeath?: boolean
+  /**
+   * UTXO chains only: compute max sendable amount strictly over this candidate
+   * UTXO pool instead of fetching all address UTXOs. Ignored elsewhere.
+   */
+  selectedUtxos?: readonly ChainPlainUtxo[]
 }
 
 export type ComputeMaxSendFromBalanceParams = GetMaxSendAmountFromKeysParams & {
@@ -120,6 +129,7 @@ export const computeMaxSendFromBalance = async (
     sendMaxAmount: true,
     tonGasless: params.tonGasless,
     allowDeath: params.allowDeath,
+    selectedUtxos: params.selectedUtxos,
   })
 
   // TerraClassic USTC pays its fee (base gas + burn tax) in `uusd` — the same
@@ -171,7 +181,10 @@ export const getMaxSendAmountFromKeys = async (
   const walletCore = walletCoreOverride ?? (await getWalletCore())
   // Receiver validation lives in computeMaxSendFromBalance (the canonical check
   // for all callers) — don't duplicate it here.
-  const balance = await getCoinBalance(params.coin)
+  const balance =
+    isChainOfKind(params.coin.chain, 'utxo') && params.selectedUtxos !== undefined
+      ? bigIntSum(validateSelectedUtxos(params.selectedUtxos).map(({ amount }) => amount))
+      : await getCoinBalance(params.coin)
   const nativeBalance =
     isFeeCoin(params.coin) || isTerraClassicUstcCoin(params.coin) || paysTonGaslessFee(params)
       ? undefined

@@ -2,6 +2,7 @@ import type { WalletCore } from '@trustwallet/wallet-core'
 import { Chain } from '@vultisig/core-chain/Chain'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { getUtxoMinSendAmountError } from '@vultisig/core-chain/chains/utxo/send/validateUtxoRequirements'
+import type { ChainPlainUtxo } from '@vultisig/core-chain/chains/utxo/tx/ChainPlainUtxo'
 import type { AccountCoin } from '@vultisig/core-chain/coin/AccountCoin'
 import { getPublicKey } from '@vultisig/core-chain/publicKey/getPublicKey'
 import { assertSafeDestination } from '@vultisig/core-chain/security/dangerousAddresses'
@@ -46,6 +47,12 @@ export type PrepareSendTxFromKeysParams = {
    * disclosed; ignored on other chains.
    */
   allowDeath?: boolean
+  /**
+   * UTXO chains only: optional candidate pool of UTXOs to select inputs from
+   * (coin control). Omit to let the planner choose from all address UTXOs.
+   * Ignored on non-UTXO chains (including Cardano).
+   */
+  selectedUtxos?: readonly ChainPlainUtxo[]
 }
 
 /**
@@ -168,5 +175,6 @@ export const prepareSendTxFromKeys = async (
     sendMaxAmount: params.sendMaxAmount,
     tonGasless: params.tonGasless,
     allowDeath: params.allowDeath,
+    selectedUtxos: params.selectedUtxos,
   })
 }

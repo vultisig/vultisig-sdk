@@ -3,9 +3,15 @@ import { Chain } from '@vultisig/core-chain/Chain'
 import { ChainAccount } from '@vultisig/core-chain/ChainAccount'
 import { isChainOfKind } from '@vultisig/core-chain/ChainKind'
 import { getCardanoExtendedUtxos } from '@vultisig/core-chain/chains/cardano/utxo/getCardanoExtendedUtxos'
+import type { ChainPlainUtxo } from '@vultisig/core-chain/chains/utxo/tx/ChainPlainUtxo'
 import { getUtxos } from '@vultisig/core-chain/chains/utxo/tx/getUtxos'
 
-import { CardanoTokenAssetSchema, UtxoInfoSchema } from '../../types/vultisig/keysign/v1/utxo_info_pb'
+import { CardanoTokenAssetSchema, UtxoInfo, UtxoInfoSchema } from '../../types/vultisig/keysign/v1/utxo_info_pb'
+import { BuildKeysignPayloadError } from '../error'
+
+const utxoHashPattern = /^[0-9a-f]{64}$/i
+const maxUint32 = 0xffffffff
+const maxInt64 = 0x7fffffffffffffffn
 
 const toUtxoInfo = (plain: { hash: string; amount: bigint; index: number }) =>
   create(UtxoInfoSchema, {
@@ -13,6 +19,59 @@ const toUtxoInfo = (plain: { hash: string; amount: bigint; index: number }) =>
     amount: plain.amount,
     index: plain.index,
   })
+
+/**
+ * Validates and normalizes a caller-supplied candidate pool of UTXOs.
+ *
+ * Raised as a [BuildKeysignPayloadError] because bad UTXO input is deterministic
+ * and must fail before WalletCore planning rather than retrying or silently
+ * falling back to fetching unselected outputs.
+ */
+export const validateSelectedUtxos = (selectedUtxos: readonly ChainPlainUtxo[]): ChainPlainUtxo[] => {
+  if (!Array.isArray(selectedUtxos) || selectedUtxos.length === 0) {
+    throw new BuildKeysignPayloadError('utxo-selected-inputs-invalid', 'selectedUtxos must contain at least one UTXO')
+  }
+
+  const seenOutpoints = new Set<string>()
+  return selectedUtxos.map((utxo, position) => {
+    if (!utxo || typeof utxo.hash !== 'string' || !utxoHashPattern.test(utxo.hash)) {
+      throw new BuildKeysignPayloadError(
+        'utxo-selected-inputs-invalid',
+        `Invalid UTXO hash at index ${position}: expected a 64-character hex txid`
+      )
+    }
+
+    if (typeof utxo.index !== 'number' || !Number.isInteger(utxo.index) || utxo.index < 0 || utxo.index > maxUint32) {
+      throw new BuildKeysignPayloadError(
+        'utxo-selected-inputs-invalid',
+        `Invalid UTXO index at index ${position}: expected a uint32 integer`
+      )
+    }
+
+    if (typeof utxo.amount !== 'bigint' || utxo.amount <= 0n || utxo.amount > maxInt64) {
+      throw new BuildKeysignPayloadError(
+        'utxo-selected-inputs-invalid',
+        `Invalid UTXO amount at index ${position}: expected a positive int64 bigint`
+      )
+    }
+
+    const hash = utxo.hash.toLowerCase()
+    const outpointKey = `${hash}:${utxo.index}`
+    if (seenOutpoints.has(outpointKey)) {
+      throw new BuildKeysignPayloadError('utxo-selected-inputs-invalid', `Duplicate UTXO outpoint: ${outpointKey}`)
+    }
+    seenOutpoints.add(outpointKey)
+
+    return {
+      hash,
+      index: utxo.index,
+      amount: utxo.amount,
+    }
+  })
+}
+
+export const toSelectedUtxoInfo = (selectedUtxos: readonly ChainPlainUtxo[]): UtxoInfo[] =>
+  validateSelectedUtxos(selectedUtxos).map(toUtxoInfo)
 
 /**
  * Canonicalize a Koios asset quantity for the keysign wire: iOS parses the

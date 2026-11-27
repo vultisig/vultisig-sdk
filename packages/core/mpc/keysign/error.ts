@@ -14,6 +14,7 @@ export type BuildKeysignPayloadErrorType =
   | 'ton-gasless-unsupported'
   | 'ton-memo-too-long'
   | 'utxo-dust-amount-requested'
+  | 'utxo-selected-inputs-invalid'
 
 export class BuildKeysignPayloadError extends Error {
   constructor(

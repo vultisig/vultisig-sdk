@@ -33,6 +33,7 @@ export type {
   SaveFileOptions,
   SeedphraseValidation,
   SelectedFile,
+  SelectedUtxoInput,
   SelectFilesOptions,
   SelectFilesResult,
   SendTxParams,
