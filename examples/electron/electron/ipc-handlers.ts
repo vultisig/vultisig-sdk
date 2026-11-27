@@ -485,6 +485,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
         receiver: string
         amount: string
         memo?: string
+        selectedUtxos?: Array<{ hash: string; index: number; amount: string }>
       }
     ) => {
       const sdk = getSDK()
@@ -494,6 +495,11 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
       const keysignPayload = await vault.prepareSendTx({
         ...params,
         amount: BigInt(params.amount),
+        selectedUtxos: params.selectedUtxos?.map(utxo => ({
+          hash: utxo.hash,
+          index: utxo.index,
+          amount: BigInt(utxo.amount),
+        })),
       })
 
       // Serialize payload for IPC (convert BigInt to string)
@@ -507,7 +513,18 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
     const sdk = getSDK()
     const vault = await sdk.getVaultById(vaultId)
     if (!vault) throw new VaultError(VaultErrorCode.VaultNotFound, 'Vault not found')
-    const result = await vault.getMaxSendAmount(params)
+    const result = await vault.getMaxSendAmount({
+      ...params,
+      ...(params?.selectedUtxos
+        ? {
+            selectedUtxos: params.selectedUtxos.map((utxo: { hash: string; index: number; amount: string }) => ({
+              hash: utxo.hash,
+              index: utxo.index,
+              amount: BigInt(utxo.amount),
+            })),
+          }
+        : {}),
+    })
     return JSON.parse(JSON.stringify(result, (_key, value) => (typeof value === 'bigint' ? value.toString() : value)))
   })
 

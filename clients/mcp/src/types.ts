@@ -29,6 +29,12 @@ export type Signer = {
   name: string
 }
 
+export type SelectedUtxo = {
+  hash: string
+  index: number
+  amount: bigint
+}
+
 export type Vault = {
   name: string
   type: 'fast' | 'secure'
@@ -46,6 +52,7 @@ export type Vault = {
     amount: string
     symbol?: string
     memo?: string
+    selectedUtxos?: readonly SelectedUtxo[]
     dryRun?: boolean
   }): Promise<SendResult>
   swap(params: {

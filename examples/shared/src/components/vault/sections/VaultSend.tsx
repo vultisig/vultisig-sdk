@@ -1,9 +1,15 @@
+import { fromChainAmountExact } from '@vultisig/sdk'
 import { useEffect, useRef, useState } from 'react'
 
 import type { ISDKAdapter } from '../../../adapters'
 import { useSDKAdapter } from '../../../adapters'
 import type { CoinInfo, ProgressStep, TokenInfo, VaultInfo } from '../../../types'
-import { getChainNativeDecimals, getChainNativeTicker } from '../../../utils/formatting'
+import {
+  getChainNativeDecimals,
+  getChainNativeTicker,
+  isUtxoChain,
+  parseSelectedUtxosInput,
+} from '../../../utils/formatting'
 import Button from '../../common/Button'
 import Input from '../../common/Input'
 import Select from '../../common/Select'
@@ -27,6 +33,8 @@ export default function VaultSend({ vault }: VaultSendProps) {
     amount: '',
     tokenId: '', // Empty means native token
     memo: '',
+    useSelectedUtxos: false,
+    selectedUtxosText: '',
   })
   const [isLoading, setIsLoading] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
@@ -86,6 +94,14 @@ export default function VaultSend({ vault }: VaultSendProps) {
 
   const handleMaxSend = async () => {
     if (!formData.chain || !formData.recipient.trim()) return
+    const parsedUtxos =
+      isUtxoChain(formData.chain) && formData.useSelectedUtxos
+        ? parseSelectedUtxosInput(formData.selectedUtxosText)
+        : undefined
+    if (parsedUtxos && !parsedUtxos.ok) {
+      setError(parsedUtxos.message)
+      return
+    }
     setIsLoadingMax(true)
     setError(null)
     try {
@@ -102,6 +118,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
         coin,
         receiver: formData.recipient.trim(),
         memo: formData.memo || undefined,
+        ...(parsedUtxos?.ok ? { selectedUtxos: parsedUtxos.utxos } : {}),
       })
       setFormData(prev => ({ ...prev, amount: formatAmount(maxInfo.maxSendable, balance.decimals) }))
     } catch (err: any) {
@@ -128,6 +145,13 @@ export default function VaultSend({ vault }: VaultSendProps) {
     const recipient = formData.recipient.trim()
     if (!recipient) {
       setError('Enter a recipient address.')
+      return
+    }
+
+    const parsedSelectedUtxos =
+      isUtxoChain(chain) && formData.useSelectedUtxos ? parseSelectedUtxosInput(formData.selectedUtxosText) : undefined
+    if (parsedSelectedUtxos && !parsedSelectedUtxos.ok) {
+      setError(parsedSelectedUtxos.message)
       return
     }
 
@@ -192,6 +216,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
         receiver: recipient,
         amount: amountBigInt,
         memo: formData.memo || undefined,
+        ...(parsedSelectedUtxos?.ok ? { selectedUtxos: parsedSelectedUtxos.utxos } : {}),
       })
 
       // Extract message hashes from the keysign payload
@@ -240,6 +265,8 @@ export default function VaultSend({ vault }: VaultSendProps) {
         recipient: '',
         amount: '',
         memo: '',
+        useSelectedUtxos: false,
+        selectedUtxosText: '',
       }))
     } catch (err) {
       // Cleanup on error
@@ -271,7 +298,11 @@ export default function VaultSend({ vault }: VaultSendProps) {
   const sendDecimals = selectedToken?.decimals ?? getChainNativeDecimals(formData.chain)
   const amountParseState = parseSendAmountToBigInt(formData.amount, sendDecimals)
   const recipientOk = formData.recipient.trim().length > 0
-  const canSend = Boolean(formData.chain) && recipientOk && amountParseState.ok
+  const showUtxoSelection = isUtxoChain(formData.chain)
+  const selectedUtxosState =
+    showUtxoSelection && formData.useSelectedUtxos ? parseSelectedUtxosInput(formData.selectedUtxosText) : null
+  const selectedUtxosOk = selectedUtxosState === null || selectedUtxosState.ok
+  const canSend = Boolean(formData.chain) && recipientOk && amountParseState.ok && selectedUtxosOk
 
   return (
     <>
@@ -305,7 +336,15 @@ export default function VaultSend({ vault }: VaultSendProps) {
               label="Chain"
               options={chainOptions}
               value={formData.chain}
-              onChange={e => setFormData(prev => ({ ...prev, chain: e.target.value, tokenId: '' }))}
+              onChange={e =>
+                setFormData(prev => ({
+                  ...prev,
+                  chain: e.target.value,
+                  tokenId: '',
+                  useSelectedUtxos: false,
+                  selectedUtxosText: '',
+                }))
+              }
               required
             />
 
@@ -346,7 +385,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
                 <button
                   type="button"
                   onClick={handleMaxSend}
-                  disabled={!formData.chain || !recipientOk || isLoadingMax || isLoading}
+                  disabled={!formData.chain || !recipientOk || !selectedUtxosOk || isLoadingMax || isLoading}
                   className="px-3 py-2 text-sm font-medium text-primary border border-primary rounded-lg hover:bg-primary hover:text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 >
                   {isLoadingMax ? '...' : 'Max'}
@@ -369,6 +408,59 @@ export default function VaultSend({ vault }: VaultSendProps) {
               onChange={e => setFormData(prev => ({ ...prev, memo: e.target.value }))}
               placeholder="Optional message"
             />
+
+            {showUtxoSelection && (
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-sm text-gray-700">
+                  <input
+                    type="checkbox"
+                    checked={formData.useSelectedUtxos}
+                    onChange={e =>
+                      setFormData(prev => ({
+                        ...prev,
+                        useSelectedUtxos: e.target.checked,
+                      }))
+                    }
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                  />
+                  Select specific UTXOs
+                  <span className="text-gray-400 text-xs">(optional candidate pool)</span>
+                </label>
+
+                {formData.useSelectedUtxos && (
+                  <div>
+                    <textarea
+                      id="send-selected-utxos"
+                      rows={3}
+                      value={formData.selectedUtxosText}
+                      onChange={e =>
+                        setFormData(prev => ({
+                          ...prev,
+                          selectedUtxosText: e.target.value,
+                        }))
+                      }
+                      placeholder="txid:vout:satoshis (one per line)"
+                      aria-invalid={selectedUtxosState !== null && !selectedUtxosState.ok}
+                      aria-describedby="send-selected-utxos-hint"
+                      className={`w-full px-3 py-2 text-xs font-mono border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent ${
+                        selectedUtxosState !== null && !selectedUtxosState.ok ? 'border-error' : 'border-gray-300'
+                      }`}
+                    />
+                    {selectedUtxosState && (
+                      <p
+                        id="send-selected-utxos-hint"
+                        role="status"
+                        className={`mt-1 text-xs ${selectedUtxosState.ok ? 'text-gray-600' : 'text-error'}`}
+                      >
+                        {selectedUtxosState.ok
+                          ? `Candidate pool: ${selectedUtxosState.utxos.length} UTXO(s), ${fromChainAmountExact(selectedUtxosState.totalAmount, sendDecimals)} ${getChainNativeTicker(formData.chain)}`
+                          : selectedUtxosState.message}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Progress indicator (only for fast vaults - secure vaults use modal) */}
             {!isSecureVault && progress && (

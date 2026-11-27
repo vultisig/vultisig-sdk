@@ -6,7 +6,7 @@ function createMockVault() {
   return {
     name: 'TestVault',
     type: 'fast' as const,
-    chains: ['Ethereum', 'Bitcoin'],
+    chains: ['Ethereum', 'Bitcoin', 'Cardano'],
     signers: [{ id: 'signer1', publicKey: 'pk1', name: 'Signer 1' }],
     localPartyId: 'local1',
     threshold: 2,
@@ -129,6 +129,103 @@ describe('tool handlers', () => {
     expect(result.content).toHaveLength(1)
     expect(result.content[0].type).toBe('text')
     expect(typeof result.content[0].text).toBe('string')
+  })
+
+  it('send converts and forwards selectedUtxos when provided and omits it by default', async () => {
+    const vault = createMockVault()
+    const tools = getTools(vault, 'defi')
+
+    await tools.send.handler({
+      chain: 'Bitcoin',
+      to: 'bc1qrecipient',
+      amount: '0.55',
+    })
+    expect(vault.send).toHaveBeenLastCalledWith({
+      chain: 'Bitcoin',
+      to: 'bc1qrecipient',
+      amount: '0.55',
+      symbol: undefined,
+      memo: undefined,
+      dryRun: true,
+    })
+
+    const hashA = 'aa'.repeat(32)
+    const hashB = 'bb'.repeat(32)
+    await tools.send.handler({
+      chain: 'Bitcoin',
+      to: 'bc1qrecipient',
+      amount: '0.55',
+      selectedUtxos: [
+        { hash: hashA.toUpperCase(), index: 0, amount: '50000000' },
+        { hash: hashB, index: 1, amount: '10000000' },
+      ],
+      confirmed: true,
+    })
+    expect(vault.send).toHaveBeenLastCalledWith({
+      chain: 'Bitcoin',
+      to: 'bc1qrecipient',
+      amount: '0.55',
+      symbol: undefined,
+      memo: undefined,
+      selectedUtxos: [
+        { hash: hashA, index: 0, amount: 50_000_000n },
+        { hash: hashB, index: 1, amount: 10_000_000n },
+      ],
+      dryRun: false,
+    })
+  })
+
+  it.each([
+    [
+      'non-UTXO chain Ethereum',
+      'Ethereum',
+      [{ hash: 'aa'.repeat(32), index: 0, amount: '1000' }],
+      /only supported for UTXO/,
+    ],
+    [
+      'non-UTXO chain Cardano',
+      'Cardano',
+      [{ hash: 'aa'.repeat(32), index: 0, amount: '1000' }],
+      /only supported for UTXO/,
+    ],
+    ['empty array', 'Bitcoin', [], /at least one UTXO/],
+    ['invalid txid', 'Bitcoin', [{ hash: 'not-hex', index: 0, amount: '1000' }], /selectedUtxos\[0\]\.hash/],
+    [
+      'uint32 overflow index',
+      'Bitcoin',
+      [{ hash: 'aa'.repeat(32), index: 4294967296, amount: '1000' }],
+      /selectedUtxos\[0\]\.index/,
+    ],
+    ['decimal amount', 'Bitcoin', [{ hash: 'aa'.repeat(32), index: 0, amount: '0.5' }], /selectedUtxos\[0\]\.amount/],
+    [
+      'int64 overflow amount',
+      'Bitcoin',
+      [{ hash: 'aa'.repeat(32), index: 0, amount: '9223372036854775808' }],
+      /exceeds int64/,
+    ],
+    [
+      'duplicate outpoint',
+      'Bitcoin',
+      [
+        { hash: 'AA'.repeat(32), index: 0, amount: '1000' },
+        { hash: 'aa'.repeat(32), index: 0, amount: '1000' },
+      ],
+      /Duplicate outpoint/,
+    ],
+  ])('send rejects %s cleanly as MCP errors', async (_label, chain, selectedUtxos, pattern) => {
+    const vault = createMockVault()
+    const tools = getTools(vault, 'defi')
+
+    const result = await tools.send.handler({
+      chain,
+      to: 'recipient',
+      amount: '0.55',
+      selectedUtxos,
+    })
+
+    expect(result.isError).toBe(true)
+    expect(JSON.parse(result.content[0].text).error).toMatch(pattern)
+    expect(vault.send).not.toHaveBeenCalled()
   })
 })
 

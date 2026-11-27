@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs'
 
 import { descriptions } from '@vultisig/client-shared'
 import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
-import { Chain, parseKeygenQR, SEEDPHRASE_WORD_COUNTS, Vultisig } from '@vultisig/sdk'
+import { Chain, isChainOfKind, parseKeygenQR, SEEDPHRASE_WORD_COUNTS, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { Command, CommanderError, InvalidArgumentError, program } from 'commander'
 
@@ -64,6 +64,7 @@ import {
   executeTxStatus,
   executeVaults,
   executeVerify,
+  parseUtxoSpecs,
   resolveTxStatusParams,
 } from './commands'
 import {
@@ -703,6 +704,11 @@ program
     '--allow-death',
     'Empty a Polkadot or Bittensor account with --max: the chain reaps it and destroys any remainder below the existential deposit'
   )
+  .option(
+    '--utxo <txid:vout:satoshis>',
+    'UTXO chains only: restrict input selection to specific UTXO(s) (repeatable)',
+    (value: string, previous?: string[]) => [...(previous ?? []), value]
+  )
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
@@ -736,6 +742,7 @@ See also: balance, tx-status`
           destinationTag?: string
           gasless?: boolean
           allowDeath?: boolean
+          utxo?: string[]
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
@@ -760,6 +767,10 @@ See also: balance, tx-status`
             throw new Error('--allow-death empties the native account, so it requires --max and no --token')
           }
         }
+        if (options.utxo?.length && !isChainOfKind(chain, 'utxo')) {
+          throw new InvalidInputError('--utxo is only supported for UTXO chains')
+        }
+        const selectedUtxos = options.utxo?.length ? parseUtxoSpecs(options.utxo) : undefined
         const destinationTag = options.destinationTag === undefined ? undefined : Number(options.destinationTag)
         if (
           options.destinationTag !== undefined &&
@@ -782,6 +793,7 @@ See also: balance, tx-status`
           destinationTag,
           gasless: options.gasless,
           allowDeath: options.allowDeath,
+          selectedUtxos,
           dryRun: options.dryRun,
           yes: options.yes || options.confirm,
           force: options.force,
