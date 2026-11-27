@@ -57,9 +57,20 @@ export default function VaultSend({ vault }: VaultSendProps) {
 
   const [isLoadingMax, setIsLoadingMax] = useState(false)
   const maxRequestIdRef = useRef(0)
+  const isMaxAmountRef = useRef(false)
 
   // Get selected token info
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null)
+
+  const updateFundingField = (patch: Partial<typeof formData>) => {
+    const clearMaxAmount = isMaxAmountRef.current
+    isMaxAmountRef.current = false
+    setFormData(prev => ({
+      ...prev,
+      ...patch,
+      ...(clearMaxAmount ? { amount: '' } : {}),
+    }))
+  }
 
   useEffect(() => {
     maxRequestIdRef.current += 1
@@ -144,6 +155,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
         ...(parsedUtxos?.ok ? { selectedUtxos: parsedUtxos.utxos } : {}),
       })
       if (maxRequestIdRef.current !== requestId) return
+      isMaxAmountRef.current = true
       setFormData(prev => ({ ...prev, amount: formatAmount(maxInfo.maxSendable, decimals) }))
     } catch (err: any) {
       if (maxRequestIdRef.current !== requestId) return
@@ -287,6 +299,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
       pollTxStatus(sdk, vault.id, chain, txHash, setResult)
 
       // Reset form
+      isMaxAmountRef.current = false
       setFormData(prev => ({
         ...prev,
         recipient: '',
@@ -364,13 +377,12 @@ export default function VaultSend({ vault }: VaultSendProps) {
               options={chainOptions}
               value={formData.chain}
               onChange={e =>
-                setFormData(prev => ({
-                  ...prev,
+                updateFundingField({
                   chain: e.target.value,
                   tokenId: '',
                   useSelectedUtxos: false,
                   selectedUtxosText: '',
-                }))
+                })
               }
               required
             />
@@ -379,7 +391,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
               chain={formData.chain}
               vault={vault}
               value={formData.tokenId}
-              onChange={tokenId => setFormData(prev => ({ ...prev, tokenId }))}
+              onChange={tokenId => updateFundingField({ tokenId })}
               label="Token"
             />
 
@@ -400,7 +412,10 @@ export default function VaultSend({ vault }: VaultSendProps) {
                   id="send-amount"
                   type="text"
                   value={formData.amount}
-                  onChange={e => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                  onChange={e => {
+                    isMaxAmountRef.current = false
+                    setFormData(prev => ({ ...prev, amount: e.target.value }))
+                  }}
                   placeholder="0.0"
                   required
                   aria-invalid={!amountParseState.ok && formData.amount.trim().length > 0}
@@ -442,12 +457,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
                   <input
                     type="checkbox"
                     checked={formData.useSelectedUtxos}
-                    onChange={e =>
-                      setFormData(prev => ({
-                        ...prev,
-                        useSelectedUtxos: e.target.checked,
-                      }))
-                    }
+                    onChange={e => updateFundingField({ useSelectedUtxos: e.target.checked })}
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
                   Select specific UTXOs
@@ -460,12 +470,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
                       id="send-selected-utxos"
                       rows={3}
                       value={formData.selectedUtxosText}
-                      onChange={e =>
-                        setFormData(prev => ({
-                          ...prev,
-                          selectedUtxosText: e.target.value,
-                        }))
-                      }
+                      onChange={e => updateFundingField({ selectedUtxosText: e.target.value })}
                       placeholder="txid:vout:satoshis (one per line)"
                       aria-invalid={selectedUtxosState !== null && !selectedUtxosState.ok}
                       aria-describedby="send-selected-utxos-hint"
