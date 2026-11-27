@@ -542,6 +542,44 @@ describe('getMaxSendAmountFromKeys', () => {
       })
     )
   })
+
+  it('computes UTXO max send strictly from selectedUtxos without fetching balance', async () => {
+    const selectedUtxos = [
+      { hash: 'aa'.repeat(32), index: 0, amount: 50_000_000n },
+      { hash: 'bb'.repeat(32), index: 1, amount: 10_000_000n },
+    ]
+    const fee = 2_500n
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+
+    const result = await getMaxSendAmountFromKeys(baseIdentity, {
+      coin: { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' },
+      receiver: 'bc1qreceiver',
+      selectedUtxos,
+    })
+
+    expect(mockGetCoinBalance).not.toHaveBeenCalled()
+    expect(mockGetSendFeeEstimate).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 60_000_000n, sendMaxAmount: true, selectedUtxos })
+    )
+    expect(result).toEqual({
+      balance: 60_000_000n,
+      fee,
+      maxSendable: 59_997_500n,
+    })
+  })
+
+  it('rejects empty selectedUtxos before estimating max send fee', async () => {
+    await expect(
+      getMaxSendAmountFromKeys(baseIdentity, {
+        coin: { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' },
+        receiver: 'bc1qreceiver',
+        selectedUtxos: [],
+      })
+    ).rejects.toMatchObject({ type: 'utxo-selected-inputs-invalid' })
+
+    expect(mockGetCoinBalance).not.toHaveBeenCalled()
+    expect(mockGetSendFeeEstimate).not.toHaveBeenCalled()
+  })
 })
 
 describe('computeMaxSendFromBalance', () => {

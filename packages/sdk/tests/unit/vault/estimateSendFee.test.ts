@@ -119,4 +119,22 @@ describe('VaultBase.estimateSendFee', () => {
 
     await expect(callPublicEstimate({ estimateSendFee }, params)).rejects.toBe(error)
   })
+
+  it('forwards selectedUtxos for UTXO fee estimates', async () => {
+    const estimateSendFee = vi.fn().mockResolvedValue(420n)
+    const selectedUtxos = [{ hash: 'aa'.repeat(32), index: 0, amount: 50_000n }]
+    const params = {
+      coin: { chain: Chain.Bitcoin, address: 'bc1qsender', decimals: 8, ticker: 'BTC' },
+      receiver: 'bc1qreceiver',
+      amount: 10_000n,
+      selectedUtxos,
+    }
+
+    await expect(callPublicEstimate({ estimateSendFee }, params)).resolves.toEqual({
+      feeAmountBase: 420n,
+      feeDecimals: 8,
+      feeSymbol: 'BTC',
+    })
+    expect(estimateSendFee).toHaveBeenCalledWith(expect.objectContaining({ selectedUtxos }))
+  })
 })

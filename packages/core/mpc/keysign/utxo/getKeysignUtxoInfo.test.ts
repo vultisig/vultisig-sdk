@@ -27,7 +27,8 @@ vi.mock('@vultisig/core-config', () => ({
 }))
 
 import { UtxoInfoSchema } from '../../types/vultisig/keysign/v1/utxo_info_pb'
-import { getKeysignUtxoInfo } from './getKeysignUtxoInfo'
+import { BuildKeysignPayloadError } from '../error'
+import { getKeysignUtxoInfo, toSelectedUtxoInfo, validateSelectedUtxos } from './getKeysignUtxoInfo'
 
 const address =
   'addr1qx2kd28nq8ac5prwg32hhvudlwggpgfp8utlyqxu6wqgz62f79qsdmm5dsknt9ecr5w468r9ey0fxwkdrwh08ly3tu9sy0f4qd'
@@ -209,5 +210,65 @@ describe('getKeysignUtxoInfo — Cardano', () => {
     ])
 
     await expect(getKeysignUtxoInfo({ chain: Chain.Cardano, address })).rejects.toThrow(/Negative Cardano asset/)
+  })
+})
+
+describe('validateSelectedUtxos / toSelectedUtxoInfo', () => {
+  const validHashA = 'a1'.repeat(32)
+  const validHashB = 'b2'.repeat(32)
+
+  it('normalizes uppercase hex hashes and allows multiple outputs from the same txid', () => {
+    const normalized = validateSelectedUtxos([
+      { hash: validHashA.toUpperCase(), index: 0, amount: 50_000_000n },
+      { hash: validHashA, index: 1, amount: 10_000_000n },
+      { hash: validHashB, index: 0xffffffff, amount: 546n },
+    ])
+
+    expect(normalized).toEqual([
+      { hash: validHashA, index: 0, amount: 50_000_000n },
+      { hash: validHashA, index: 1, amount: 10_000_000n },
+      { hash: validHashB, index: 0xffffffff, amount: 546n },
+    ])
+
+    const protoList = toSelectedUtxoInfo([
+      { hash: validHashA.toUpperCase(), index: 0, amount: 50_000_000n },
+      { hash: validHashB, index: 2, amount: 0x7fffffffffffffffn },
+    ])
+    expect(protoList).toMatchObject([
+      { hash: validHashA, index: 0, amount: 50_000_000n },
+      { hash: validHashB, index: 2, amount: 0x7fffffffffffffffn },
+    ])
+  })
+
+  it.each([
+    ['empty array', []],
+    ['non-array input', null],
+    ['short txid', [{ hash: 'abcd', index: 0, amount: 10_000n }]],
+    ['0x-prefixed txid', [{ hash: `0x${'aa'.repeat(32)}`, index: 0, amount: 10_000n }]],
+    ['non-hex txid', [{ hash: 'zz'.repeat(32), index: 0, amount: 10_000n }]],
+    ['negative output index', [{ hash: validHashA, index: -1, amount: 10_000n }]],
+    ['fractional output index', [{ hash: validHashA, index: 1.5, amount: 10_000n }]],
+    ['uint32-overflow index', [{ hash: validHashA, index: 0x1_0000_0000, amount: 10_000n }]],
+    ['zero amount', [{ hash: validHashA, index: 0, amount: 0n }]],
+    ['negative amount', [{ hash: validHashA, index: 0, amount: -5n }]],
+    ['int64-overflow amount', [{ hash: validHashA, index: 0, amount: 0x8000_0000_0000_0000n }]],
+    ['number instead of bigint amount', [{ hash: validHashA, index: 0, amount: 10_000 }]],
+    [
+      'duplicate outpoint (case-insensitive)',
+      [
+        { hash: validHashA.toUpperCase(), index: 1, amount: 10_000n },
+        { hash: validHashA, index: 1, amount: 10_000n },
+      ],
+    ],
+  ])('rejects %s with BuildKeysignPayloadError(utxo-selected-inputs-invalid)', (_label, input) => {
+    let caught: unknown
+    try {
+      validateSelectedUtxos(input as never)
+    } catch (error) {
+      caught = error
+    }
+
+    expect(caught).toBeInstanceOf(BuildKeysignPayloadError)
+    expect(caught).toMatchObject({ type: 'utxo-selected-inputs-invalid' })
   })
 })

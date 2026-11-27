@@ -256,4 +256,65 @@ describe('VaultBase.send — MAX intent', () => {
     expect(planner).toHaveBeenCalledTimes(1)
     expect(mockBuildSendKeysignPayload).toHaveBeenCalledWith(expect.objectContaining({ sendMaxAmount: false }))
   })
+
+  it('sweeps strictly over selectedUtxos for a Bitcoin max dry-run', async () => {
+    const selectedUtxos = [
+      { hash: 'aa'.repeat(32), index: 0, amount: 50_000_000n },
+      { hash: 'bb'.repeat(32), index: 1, amount: 10_000_000n },
+    ]
+    const fee = 2_000n
+    mockGetSendFeeEstimate.mockResolvedValue(fee)
+    mockGetPublicKey.mockReturnValue({ __mock: 'publicKey' })
+    mockIsValidRecipient.mockReturnValue(true)
+
+    const getBalance = vi.fn()
+    const prepareSendTx = vi.fn().mockResolvedValue({ __mock: 'bitcoin-payload' })
+    const estimateSendFee = vi.fn().mockResolvedValue(fee)
+    const bitcoinCoin = {
+      chain: Chain.Bitcoin,
+      address: 'bc1qsender',
+      decimals: 8,
+      ticker: 'BTC',
+    }
+    const stub = {
+      resolveTokenInfo: () => ({ decimals: 8, ticker: 'BTC', contractAddress: undefined }),
+      buildAccountCoin: () => bitcoinCoin,
+      address: async () => bitcoinCoin.address,
+      getMaxSendAmount: VaultBase.prototype.getMaxSendAmount,
+      wasmProvider: { getWalletCore: vi.fn().mockResolvedValue({ __mock: 'walletCore' }) },
+      balanceService: { getBalance },
+      coreVault: {
+        publicKeys: { ecdsa: '02ecdsa-public-key', eddsa: 'eddsa-public-key' },
+        hexChainCode: 'deadbeef',
+        localPartyId: 'iPhone-A1B2',
+        libType: 'DKLS',
+      },
+      parseAmount: (value: string) => BigInt(value),
+      formatUnits: (value: bigint) => value.toString(),
+      transactionBuilder: { estimateSendFee },
+      prepareSendTx,
+    }
+
+    await expect(
+      VaultBase.prototype.send.call(stub as never, {
+        chain: Chain.Bitcoin,
+        to: 'bc1qreceiver',
+        amount: 'max',
+        selectedUtxos,
+        dryRun: true,
+      })
+    ).resolves.toMatchObject({
+      dryRun: true,
+      fee: fee.toString(),
+      total: '60000000',
+    })
+
+    expect(getBalance).not.toHaveBeenCalled()
+    expect(prepareSendTx).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 59_998_000n, sendMaxAmount: true, selectedUtxos })
+    )
+    expect(estimateSendFee).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 59_998_000n, sendMaxAmount: true, selectedUtxos })
+    )
+  })
 })

@@ -37,9 +37,13 @@ vi.mock('@vultisig/core-mpc/keysign/chainSpecific', () => ({
 vi.mock('@vultisig/core-chain/coin/balance', () => ({
   getCoinBalance: getCoinBalanceMock,
 }))
-vi.mock('@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo', () => ({
-  getKeysignUtxoInfo: getKeysignUtxoInfoMock,
-}))
+vi.mock('@vultisig/core-mpc/keysign/utxo/getKeysignUtxoInfo', async importOriginal => {
+  const actual = await importOriginal<typeof import('../utxo/getKeysignUtxoInfo')>()
+  return {
+    ...actual,
+    getKeysignUtxoInfo: getKeysignUtxoInfoMock,
+  }
+})
 vi.mock('@vultisig/core-chain/coin/balance/resolvers/bittensor', () => ({
   getBittensorCoinBalance: getBittensorCoinBalanceMock,
 }))
@@ -637,5 +641,131 @@ describe('buildSendKeysignPayload refinement on the hexPublicKeyOverride path', 
     })
 
     expect(refineKeysignUtxoMock).toHaveBeenCalledOnce()
+  })
+})
+
+describe('buildSendKeysignPayload UTXO selectedUtxos (coin control)', () => {
+  const hashA = 'aa'.repeat(32)
+  const hashB = 'bb'.repeat(32)
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getCoinBalanceMock.mockResolvedValue(110_000_000n)
+    getKeysignUtxoInfoMock.mockResolvedValue([
+      { hash: hashA, amount: 50_000_000n, index: 0 },
+      { hash: 'cc'.repeat(32), amount: 50_000_000n, index: 0 },
+      { hash: hashB, amount: 10_000_000n, index: 1 },
+    ])
+    getChainSpecificMock.mockImplementation(async input => ({
+      case: 'utxoSpecific',
+      value: await getUtxoChainSpecific({ ...input, feeSettings: { byteFee: 10n } }),
+    }))
+  })
+
+  it.each([
+    [Chain.Bitcoin, 'BTC', 'bc1qsender', 'bc1qrecipient'],
+    [Chain.BitcoinCash, 'BCH', 'qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a', 'qqsender'],
+    [Chain.Litecoin, 'LTC', 'ltc1qsender', 'ltc1qrecipient'],
+    [Chain.Dogecoin, 'DOGE', 'D7Y55fkjBjuyo8XBhTQH4Pe9X1zJSUg5pZ', 'D8Y55fkjBjuyo8XBhTQH4Pe9X1zJSUg5pZ'],
+    [Chain.Dash, 'DASH', 'Xsender', 'Xrecipient'],
+    [Chain.Zcash, 'ZEC', 't1sender', 't1recipient'],
+  ])(
+    'restricts %s candidate UTXOs strictly to selectedUtxos without fetching UTXOs or confirmed balance',
+    async (chain, ticker, sender, receiver) => {
+      const payload = await buildSendKeysignPayload({
+        coin: { chain, ticker, address: sender, decimals: 8 },
+        receiver,
+        amount: 55_000_000n,
+        vaultId: 'vault-public-key',
+        localPartyId: 'party-1',
+        publicKey: null,
+        hexPublicKeyOverride: `02${'ab'.repeat(32)}`,
+        libType: 'DKLS',
+        walletCore: {} as never,
+        selectedUtxos: [
+          { hash: hashA.toUpperCase(), index: 0, amount: 50_000_000n },
+          { hash: hashB, index: 1, amount: 10_000_000n },
+        ],
+      })
+
+      expect(getKeysignUtxoInfoMock).not.toHaveBeenCalled()
+      expect(getCoinBalanceMock).not.toHaveBeenCalled()
+      expect(vi.mocked(refineKeysignAmount)).toHaveBeenCalledWith(expect.objectContaining({ balance: 60_000_000n }))
+      expect(refineKeysignUtxoMock).toHaveBeenCalledOnce()
+      expect(payload.utxoInfo).toMatchObject([
+        { hash: hashA, index: 0, amount: 50_000_000n },
+        { hash: hashB, index: 1, amount: 10_000_000n },
+      ])
+    }
+  )
+
+  it('rejects invalid selectedUtxos before fetching chain-specific data or UTXOs', async () => {
+    await expect(
+      buildSendKeysignPayload({
+        coin: { chain: Chain.Bitcoin, ticker: 'BTC', address: 'bc1qsender', decimals: 8 },
+        receiver: 'bc1qrecipient',
+        amount: 10_000n,
+        vaultId: 'vault-public-key',
+        localPartyId: 'party-1',
+        publicKey: null,
+        hexPublicKeyOverride: `02${'ab'.repeat(32)}`,
+        libType: 'DKLS',
+        walletCore: {} as never,
+        selectedUtxos: [],
+      })
+    ).rejects.toMatchObject({
+      name: 'BuildKeysignPayloadError',
+      type: 'utxo-selected-inputs-invalid',
+    })
+
+    expect(getKeysignUtxoInfoMock).not.toHaveBeenCalled()
+    expect(getChainSpecificMock).not.toHaveBeenCalled()
+    expect(getCoinBalanceMock).not.toHaveBeenCalled()
+  })
+
+  it('preserves default on-chain UTXO lookup when selectedUtxos is omitted', async () => {
+    const btcCoin = { chain: Chain.Bitcoin, ticker: 'BTC', address: 'bc1qsender', decimals: 8 }
+    await buildSendKeysignPayload({
+      coin: btcCoin,
+      receiver: 'bc1qrecipient',
+      amount: 55_000_000n,
+      vaultId: 'vault-public-key',
+      localPartyId: 'party-1',
+      publicKey: null,
+      hexPublicKeyOverride: `02${'ab'.repeat(32)}`,
+      libType: 'DKLS',
+      walletCore: {} as never,
+    })
+
+    expect(getKeysignUtxoInfoMock).toHaveBeenCalledWith(btcCoin)
+    expect(getCoinBalanceMock).toHaveBeenCalledWith(btcCoin)
+  })
+
+  it('ignores selectedUtxos on non-UTXO chains including Cardano', async () => {
+    getKeysignUtxoInfoMock.mockResolvedValue(undefined)
+    getChainSpecificMock.mockResolvedValue({
+      case: 'rippleSpecific',
+      value: create(RippleSpecificSchema, {
+        sequence: 1n,
+        gas: 15n,
+        lastLedgerSequence: 2n,
+      }),
+    })
+
+    await buildSendKeysignPayload({
+      coin: rippleCoin,
+      receiver: 'rDestinationBBBBBBBBBBBBBBBBBBBBBB',
+      amount: 1_000n,
+      vaultId: 'vault-public-key',
+      localPartyId: 'party-1',
+      publicKey: null,
+      hexPublicKeyOverride: `02${'ab'.repeat(32)}`,
+      libType: 'DKLS',
+      walletCore: {} as never,
+      selectedUtxos: [],
+    })
+
+    expect(getKeysignUtxoInfoMock).toHaveBeenCalledWith(rippleCoin)
+    expect(getCoinBalanceMock).toHaveBeenCalledWith(rippleCoin)
   })
 })
