@@ -50,9 +50,20 @@ export default function VaultSend({ vault }: VaultSendProps) {
 
   const [isLoadingMax, setIsLoadingMax] = useState(false)
   const maxRequestIdRef = useRef(0)
+  const isMaxAmountRef = useRef(false)
 
   // Get selected token info
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null)
+
+  const updateFundingField = (patch: Partial<typeof formData>) => {
+    const clearMaxAmount = isMaxAmountRef.current
+    isMaxAmountRef.current = false
+    setFormData(prev => ({
+      ...prev,
+      ...patch,
+      ...(clearMaxAmount ? { amount: '' } : {}),
+    }))
+  }
 
   useEffect(() => {
     maxRequestIdRef.current += 1
@@ -123,6 +134,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
         ...(useUnconfirmed ? { includeUnconfirmed: true } : {}),
       })
       if (maxRequestIdRef.current !== requestId) return
+      isMaxAmountRef.current = true
       setFormData(prev => ({ ...prev, amount: formatAmount(maxInfo.maxSendable, decimals) }))
     } catch (err: any) {
       if (maxRequestIdRef.current !== requestId) return
@@ -259,6 +271,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
       pollTxStatus(sdk, vault.id, chain, txHash, setResult)
 
       // Reset form
+      isMaxAmountRef.current = false
       setFormData(prev => ({
         ...prev,
         recipient: '',
@@ -329,9 +342,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
               label="Chain"
               options={chainOptions}
               value={formData.chain}
-              onChange={e =>
-                setFormData(prev => ({ ...prev, chain: e.target.value, tokenId: '', includeUnconfirmed: false }))
-              }
+              onChange={e => updateFundingField({ chain: e.target.value, tokenId: '', includeUnconfirmed: false })}
               required
             />
 
@@ -339,7 +350,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
               chain={formData.chain}
               vault={vault}
               value={formData.tokenId}
-              onChange={tokenId => setFormData(prev => ({ ...prev, tokenId }))}
+              onChange={tokenId => updateFundingField({ tokenId })}
               label="Token"
             />
 
@@ -360,7 +371,10 @@ export default function VaultSend({ vault }: VaultSendProps) {
                   id="send-amount"
                   type="text"
                   value={formData.amount}
-                  onChange={e => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                  onChange={e => {
+                    isMaxAmountRef.current = false
+                    setFormData(prev => ({ ...prev, amount: e.target.value }))
+                  }}
                   placeholder="0.0"
                   required
                   aria-invalid={!amountParseState.ok && formData.amount.trim().length > 0}
@@ -401,7 +415,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
                 <input
                   type="checkbox"
                   checked={formData.includeUnconfirmed}
-                  onChange={e => setFormData(prev => ({ ...prev, includeUnconfirmed: e.target.checked }))}
+                  onChange={e => updateFundingField({ includeUnconfirmed: e.target.checked })}
                   className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                 />
                 Include unconfirmed (pending) UTXOs
