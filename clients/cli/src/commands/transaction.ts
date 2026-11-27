@@ -3,12 +3,12 @@
  */
 import { getLegacyDestinationTag, resolveDestinationTag } from '@vultisig/core-mpc/keysign/utils/rippleDestinationTag'
 import type { KeysignPayload, VaultBase } from '@vultisig/sdk'
-import { Chain, normalizeRippleDestination, Vultisig } from '@vultisig/sdk'
+import { Chain, isChainOfKind, normalizeRippleDestination, Vultisig } from '@vultisig/sdk'
 import qrcode from 'qrcode-terminal'
 
 import type { CommandContext, SendDryRunResult, SendParams, TransactionResult } from '../core'
 import { buildSendBroadcastIntent, ensureVaultUnlocked, guardedBroadcast } from '../core'
-import { ConfirmationRequiredError } from '../core/errors'
+import { ConfirmationRequiredError, InvalidInputError } from '../core/errors'
 import {
   createSpinner,
   info,
@@ -72,6 +72,10 @@ export async function executeSend(
     throw new Error(`Invalid chain: ${params.chain}`)
   }
 
+  if (params.includeUnconfirmed && !isChainOfKind(params.chain, 'utxo')) {
+    throw new InvalidInputError('--include-unconfirmed is only supported for UTXO chains')
+  }
+
   const isMax = params.amount === 'max'
   if (!isMax && (isNaN(parseFloat(params.amount)) || parseFloat(params.amount) <= 0)) {
     throw new Error('Invalid amount')
@@ -100,7 +104,11 @@ async function previewDryRun(
   to: string
 ): Promise<SendDryRunResult> {
   const balance = await vault.balance(params.chain, params.tokenId)
-  const hasInsufficientBalance = parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
+  // `vault.balance()` returns confirmed funds only; when `includeUnconfirmed`
+  // is enabled, the SDK already validated affordability across confirmed +
+  // mempool UTXOs while building the dry-run payload.
+  const hasInsufficientBalance =
+    !params.includeUnconfirmed && parseFloat(dryResult.total) > parseFloat(balance.formattedAmount)
   const { memo: previewMemo, destinationTag: payloadDestinationTag } = getSendPreviewDetails(
     params.chain,
     dryResult.keysignPayload
@@ -238,6 +246,7 @@ export async function sendTransaction(
     destinationTag,
     gasless: params.gasless,
     allowDeath: params.allowDeath,
+    ...(params.includeUnconfirmed ? { includeUnconfirmed: true } : {}),
     dryRun: true,
   })
 
@@ -357,6 +366,7 @@ export async function sendTransaction(
         destinationTag,
         gasless: params.gasless,
         allowDeath: params.allowDeath,
+        ...(params.includeUnconfirmed ? { includeUnconfirmed: true } : {}),
       })
       if (result.dryRun) throw new Error('unreachable')
       return result as Extract<typeof result, { dryRun: false }>

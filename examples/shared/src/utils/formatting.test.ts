@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getChainNativeDecimals, getChainNativeTicker } from './formatting'
+import { getChainNativeDecimals, getChainNativeTicker, isUtxoChain } from './formatting'
 
 // Regression for the local-map drift found in VaultSend/VaultSwap: these chains
 // were previously missing (or wrong) in the hand-rolled tickerMap/decimalsMap
@@ -23,4 +23,20 @@ describe('getChainNativeTicker / getChainNativeDecimals', () => {
     expect(getChainNativeTicker('NotARealChain')).toBe('NotARealChain')
     expect(getChainNativeDecimals('NotARealChain')).toBe(18)
   })
+})
+
+describe('isUtxoChain', () => {
+  it.each(['Bitcoin', 'Bitcoin-Cash', 'Litecoin', 'Dogecoin', 'Dash', 'Zcash'])(
+    'returns true for UTXO chain %s',
+    chain => {
+      expect(isUtxoChain(chain)).toBe(true)
+    }
+  )
+
+  it.each(['Ethereum', 'Solana', 'Cardano', 'Cosmos', 'NotARealChain', ''])(
+    'returns false for non-UTXO chain %s',
+    chain => {
+      expect(isUtxoChain(chain)).toBe(false)
+    }
+  )
 })

@@ -194,6 +194,7 @@ export type SendTxParams = {
   receiver: string
   amount: string | bigint
   memo?: string
+  includeUnconfirmed?: boolean
 }
 
 export type BroadcastParams = {

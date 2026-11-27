@@ -105,7 +105,7 @@ export type ISDKAdapter = {
 
   getMaxSendAmount(
     vaultId: string,
-    params: { coin: CoinInfo; receiver: string; memo?: string }
+    params: { coin: CoinInfo; receiver: string; memo?: string; includeUnconfirmed?: boolean }
   ): Promise<MaxSendAmountResult>
 
   extractMessageHashes(vaultId: string, keysignPayload: unknown): Promise<string[]>

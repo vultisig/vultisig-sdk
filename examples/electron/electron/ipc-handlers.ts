@@ -485,6 +485,7 @@ export function registerIpcHandlers(ipcMain: IpcMain): void {
         receiver: string
         amount: string
         memo?: string
+        includeUnconfirmed?: boolean
       }
     ) => {
       const sdk = getSDK()

@@ -1,5 +1,5 @@
 import { descriptions } from '@vultisig/client-shared'
-import { resolveChainReference } from '@vultisig/sdk'
+import { Chain, isChainOfKind, resolveChainReference } from '@vultisig/sdk'
 import * as z from 'zod/v4'
 
 import type { Vault } from './types.js'
@@ -144,17 +144,26 @@ export function getTools(vault: Vault, profile: Profile = 'defi'): Record<string
         amount: z.string().describe(descriptions.send.params.amount),
         token: z.string().optional().describe(descriptions.send.params.token),
         memo: z.string().optional().describe(descriptions.send.params.memo),
+        includeUnconfirmed: z.boolean().optional().describe(descriptions.send.params.includeUnconfirmed),
         confirmed: z.boolean().optional().describe(descriptions.send.params.confirmed),
       }),
       handler: args =>
         wrapHandler(async () => {
           const chain = resolveChain(args.chain as string, knownChains)
+          const includeUnconfirmed = args.includeUnconfirmed === true
+          if (
+            includeUnconfirmed &&
+            (!Object.values(Chain).includes(chain as Chain) || !isChainOfKind(chain as Chain, 'utxo'))
+          ) {
+            throw new Error('includeUnconfirmed is only supported for UTXO chains')
+          }
           return vault.send({
             chain,
             to: args.to as string,
             amount: args.amount as string,
             symbol: args.token as string | undefined,
             memo: args.memo as string | undefined,
+            ...(includeUnconfirmed ? { includeUnconfirmed: true } : {}),
             dryRun: args.confirmed !== true,
           })
         }),

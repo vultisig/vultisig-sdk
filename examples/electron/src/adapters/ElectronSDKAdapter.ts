@@ -125,7 +125,7 @@ declare global {
       // Transactions
       prepareSendTx(
         vaultId: string,
-        params: { coin: unknown; receiver: string; amount: string; memo?: string }
+        params: { coin: unknown; receiver: string; amount: string; memo?: string; includeUnconfirmed?: boolean }
       ): Promise<unknown>
       getMaxSendAmount(vaultId: string, params: unknown): Promise<MaxSendAmountResult>
       extractMessageHashes(vaultId: string, keysignPayload: unknown): Promise<string[]>
@@ -431,12 +431,13 @@ export class ElectronSDKAdapter extends SDKAdapterEventSubscriptionBase implemen
       receiver: params.receiver,
       amount: String(params.amount),
       memo: params.memo,
+      includeUnconfirmed: params.includeUnconfirmed,
     })
   }
 
   async getMaxSendAmount(
     vaultId: string,
-    params: { coin: CoinInfo; receiver: string; memo?: string }
+    params: { coin: CoinInfo; receiver: string; memo?: string; includeUnconfirmed?: boolean }
   ): Promise<MaxSendAmountResult> {
     return window.electronAPI.getMaxSendAmount(vaultId, params)
   }

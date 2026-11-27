@@ -6,7 +6,7 @@ function createMockVault() {
   return {
     name: 'TestVault',
     type: 'fast' as const,
-    chains: ['Ethereum', 'Bitcoin'],
+    chains: ['Ethereum', 'Bitcoin', 'Cardano'],
     signers: [{ id: 'signer1', publicKey: 'pk1', name: 'Signer 1' }],
     localPartyId: 'local1',
     threshold: 2,
@@ -130,6 +130,61 @@ describe('tool handlers', () => {
     expect(result.content[0].type).toBe('text')
     expect(typeof result.content[0].text).toBe('string')
   })
+
+  it('send forwards includeUnconfirmed only when explicitly enabled', async () => {
+    const vault = createMockVault()
+    const tools = getTools(vault, 'defi')
+
+    await tools.send.handler({
+      chain: 'Bitcoin',
+      to: 'bc1qrecipient',
+      amount: '0.01',
+    })
+    expect(vault.send).toHaveBeenLastCalledWith({
+      chain: 'Bitcoin',
+      to: 'bc1qrecipient',
+      amount: '0.01',
+      symbol: undefined,
+      memo: undefined,
+      dryRun: true,
+    })
+
+    await tools.send.handler({
+      chain: 'Bitcoin',
+      to: 'bc1qrecipient',
+      amount: '0.01',
+      includeUnconfirmed: true,
+      confirmed: true,
+    })
+    expect(vault.send).toHaveBeenLastCalledWith({
+      chain: 'Bitcoin',
+      to: 'bc1qrecipient',
+      amount: '0.01',
+      symbol: undefined,
+      memo: undefined,
+      includeUnconfirmed: true,
+      dryRun: false,
+    })
+  })
+
+  it.each(['Ethereum', 'Cardano'])(
+    'send rejects includeUnconfirmed on non-UTXO chain %s cleanly as an MCP error',
+    async chain => {
+      const vault = createMockVault()
+      const tools = getTools(vault, 'defi')
+
+      const result = await tools.send.handler({
+        chain,
+        to: 'recipient',
+        amount: '0.01',
+        includeUnconfirmed: true,
+      })
+
+      expect(result.isError).toBe(true)
+      expect(JSON.parse(result.content[0].text).error).toMatch(/only supported for UTXO/)
+      expect(vault.send).not.toHaveBeenCalled()
+    }
+  )
 })
 
 const CHAINS = ['Ethereum', 'Bitcoin', 'Bitcoin-Cash', 'Solana', 'THORChain', 'TerraClassic', 'Base'] as const

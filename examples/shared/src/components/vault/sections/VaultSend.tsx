@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ISDKAdapter } from '../../../adapters'
 import { useSDKAdapter } from '../../../adapters'
 import type { CoinInfo, ProgressStep, TokenInfo, VaultInfo } from '../../../types'
-import { getChainNativeDecimals, getChainNativeTicker } from '../../../utils/formatting'
+import { getChainNativeDecimals, getChainNativeTicker, isUtxoChain } from '../../../utils/formatting'
 import Button from '../../common/Button'
 import Input from '../../common/Input'
 import Select from '../../common/Select'
@@ -27,6 +27,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
     amount: '',
     tokenId: '', // Empty means native token
     memo: '',
+    includeUnconfirmed: false,
   })
   const [isLoading, setIsLoading] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
@@ -102,6 +103,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
         coin,
         receiver: formData.recipient.trim(),
         memo: formData.memo || undefined,
+        ...(isUtxoChain(formData.chain) && formData.includeUnconfirmed ? { includeUnconfirmed: true } : {}),
       })
       setFormData(prev => ({ ...prev, amount: formatAmount(maxInfo.maxSendable, balance.decimals) }))
     } catch (err: any) {
@@ -192,6 +194,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
         receiver: recipient,
         amount: amountBigInt,
         memo: formData.memo || undefined,
+        ...(isUtxoChain(chain) && formData.includeUnconfirmed ? { includeUnconfirmed: true } : {}),
       })
 
       // Extract message hashes from the keysign payload
@@ -305,7 +308,9 @@ export default function VaultSend({ vault }: VaultSendProps) {
               label="Chain"
               options={chainOptions}
               value={formData.chain}
-              onChange={e => setFormData(prev => ({ ...prev, chain: e.target.value, tokenId: '' }))}
+              onChange={e =>
+                setFormData(prev => ({ ...prev, chain: e.target.value, tokenId: '', includeUnconfirmed: false }))
+              }
               required
             />
 
@@ -369,6 +374,19 @@ export default function VaultSend({ vault }: VaultSendProps) {
               onChange={e => setFormData(prev => ({ ...prev, memo: e.target.value }))}
               placeholder="Optional message"
             />
+
+            {isUtxoChain(formData.chain) && (
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={formData.includeUnconfirmed}
+                  onChange={e => setFormData(prev => ({ ...prev, includeUnconfirmed: e.target.checked }))}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                Include unconfirmed (pending) UTXOs
+                <span className="text-gray-400 text-xs">(mempool outputs)</span>
+              </label>
+            )}
 
             {/* Progress indicator (only for fast vaults - secure vaults use modal) */}
             {!isSecureVault && progress && (
