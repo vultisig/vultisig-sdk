@@ -15,6 +15,7 @@ export type SendParams = {
   destinationTag?: number
   gasless?: boolean // TON jettons on a W5 account: pay the fee in the jetton through the relay
   allowDeath?: boolean // Empty a Polkadot/Bittensor account: sign transfer_allow_death so the chain reaps it
+  includeUnconfirmed?: boolean // UTXO chains only: include unconfirmed (mempool) outputs when selecting inputs
   yes?: boolean // Skip confirmation prompt
   dryRun?: boolean // Preview transaction without signing/broadcasting
   force?: boolean // Bypass the broadcast-journal duplicate guard

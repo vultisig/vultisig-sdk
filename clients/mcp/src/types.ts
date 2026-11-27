@@ -46,6 +46,7 @@ export type Vault = {
     amount: string
     symbol?: string
     memo?: string
+    includeUnconfirmed?: boolean
     dryRun?: boolean
   }): Promise<SendResult>
   swap(params: {

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ISDKAdapter } from '../../../adapters'
 import { useSDKAdapter } from '../../../adapters'
 import type { CoinInfo, ProgressStep, TokenInfo, VaultInfo } from '../../../types'
-import { getChainNativeDecimals, getChainNativeTicker } from '../../../utils/formatting'
+import { getChainNativeDecimals, getChainNativeTicker, isUtxoChain } from '../../../utils/formatting'
 import Button from '../../common/Button'
 import Input from '../../common/Input'
 import Select from '../../common/Select'
@@ -27,6 +27,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
     amount: '',
     tokenId: '', // Empty means native token
     memo: '',
+    includeUnconfirmed: false,
   })
   const [isLoading, setIsLoading] = useState(false)
   const [progress, setProgress] = useState<string | null>(null)
@@ -48,9 +49,26 @@ export default function VaultSend({ vault }: VaultSendProps) {
   const abortControllerRef = useRef<AbortController | null>(null)
 
   const [isLoadingMax, setIsLoadingMax] = useState(false)
+  const maxRequestIdRef = useRef(0)
+  const isMaxAmountRef = useRef(false)
 
   // Get selected token info
   const [selectedToken, setSelectedToken] = useState<TokenInfo | null>(null)
+
+  const updateFundingField = (patch: Partial<typeof formData>) => {
+    const clearMaxAmount = isMaxAmountRef.current
+    isMaxAmountRef.current = false
+    setFormData(prev => ({
+      ...prev,
+      ...patch,
+      ...(clearMaxAmount ? { amount: '' } : {}),
+    }))
+  }
+
+  useEffect(() => {
+    maxRequestIdRef.current += 1
+    setIsLoadingMax(false)
+  }, [formData.chain, formData.tokenId, formData.recipient, formData.memo, formData.includeUnconfirmed])
 
   useEffect(() => {
     if (formData.tokenId && formData.chain) {
@@ -86,28 +104,45 @@ export default function VaultSend({ vault }: VaultSendProps) {
 
   const handleMaxSend = async () => {
     if (!formData.chain || !formData.recipient.trim()) return
+    const useUnconfirmed = isUtxoChain(formData.chain) && formData.includeUnconfirmed
+    const requestId = ++maxRequestIdRef.current
     setIsLoadingMax(true)
     setError(null)
     try {
       const address = await sdk.getAddress(vault.id, formData.chain)
-      const balance = await sdk.getBalance(vault.id, formData.chain, formData.tokenId || undefined)
+      let decimals: number
+      let ticker: string
+      if (useUnconfirmed) {
+        decimals = getChainNativeDecimals(formData.chain)
+        ticker = getChainNativeTicker(formData.chain)
+      } else {
+        const balance = await sdk.getBalance(vault.id, formData.chain, formData.tokenId || undefined)
+        decimals = balance.decimals
+        ticker = balance.symbol || getChainNativeTicker(formData.chain)
+      }
       const coin: CoinInfo = {
         chain: formData.chain,
         address,
-        decimals: balance.decimals,
-        ticker: balance.symbol || getChainNativeTicker(formData.chain),
-        id: formData.tokenId || undefined,
+        decimals,
+        ticker,
+        id: useUnconfirmed ? undefined : formData.tokenId || undefined,
       }
       const maxInfo = await sdk.getMaxSendAmount(vault.id, {
         coin,
         receiver: formData.recipient.trim(),
         memo: formData.memo || undefined,
+        ...(useUnconfirmed ? { includeUnconfirmed: true } : {}),
       })
-      setFormData(prev => ({ ...prev, amount: formatAmount(maxInfo.maxSendable, balance.decimals) }))
+      if (maxRequestIdRef.current !== requestId) return
+      isMaxAmountRef.current = true
+      setFormData(prev => ({ ...prev, amount: formatAmount(maxInfo.maxSendable, decimals) }))
     } catch (err: any) {
+      if (maxRequestIdRef.current !== requestId) return
       setError(`Failed to calculate max: ${err.message}`)
     } finally {
-      setIsLoadingMax(false)
+      if (maxRequestIdRef.current === requestId) {
+        setIsLoadingMax(false)
+      }
     }
   }
 
@@ -192,6 +227,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
         receiver: recipient,
         amount: amountBigInt,
         memo: formData.memo || undefined,
+        ...(isUtxoChain(chain) && formData.includeUnconfirmed ? { includeUnconfirmed: true } : {}),
       })
 
       // Extract message hashes from the keysign payload
@@ -235,6 +271,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
       pollTxStatus(sdk, vault.id, chain, txHash, setResult)
 
       // Reset form
+      isMaxAmountRef.current = false
       setFormData(prev => ({
         ...prev,
         recipient: '',
@@ -305,7 +342,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
               label="Chain"
               options={chainOptions}
               value={formData.chain}
-              onChange={e => setFormData(prev => ({ ...prev, chain: e.target.value, tokenId: '' }))}
+              onChange={e => updateFundingField({ chain: e.target.value, tokenId: '', includeUnconfirmed: false })}
               required
             />
 
@@ -313,7 +350,7 @@ export default function VaultSend({ vault }: VaultSendProps) {
               chain={formData.chain}
               vault={vault}
               value={formData.tokenId}
-              onChange={tokenId => setFormData(prev => ({ ...prev, tokenId }))}
+              onChange={tokenId => updateFundingField({ tokenId })}
               label="Token"
             />
 
@@ -334,7 +371,10 @@ export default function VaultSend({ vault }: VaultSendProps) {
                   id="send-amount"
                   type="text"
                   value={formData.amount}
-                  onChange={e => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                  onChange={e => {
+                    isMaxAmountRef.current = false
+                    setFormData(prev => ({ ...prev, amount: e.target.value }))
+                  }}
                   placeholder="0.0"
                   required
                   aria-invalid={!amountParseState.ok && formData.amount.trim().length > 0}
@@ -369,6 +409,19 @@ export default function VaultSend({ vault }: VaultSendProps) {
               onChange={e => setFormData(prev => ({ ...prev, memo: e.target.value }))}
               placeholder="Optional message"
             />
+
+            {isUtxoChain(formData.chain) && (
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input
+                  type="checkbox"
+                  checked={formData.includeUnconfirmed}
+                  onChange={e => updateFundingField({ includeUnconfirmed: e.target.checked })}
+                  className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                />
+                Include unconfirmed (pending) UTXOs
+                <span className="text-gray-400 text-xs">(mempool outputs)</span>
+              </label>
+            )}
 
             {/* Progress indicator (only for fast vaults - secure vaults use modal) */}
             {!isSecureVault && progress && (

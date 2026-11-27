@@ -39,6 +39,11 @@ export type UtxoApiOptions = {
 export type GetUtxosOptions = UtxoApiOptions & {
   chain: UtxoChainName
   address: string
+  /**
+   * Include unconfirmed (mempool) outputs in the returned list.
+   * Defaults to `false` (confirmed outputs only).
+   */
+  includeUnconfirmed?: boolean
 }
 
 export type PlainUtxo = {
@@ -65,6 +70,7 @@ async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
 export async function getUtxos(opts: GetUtxosOptions): Promise<PlainUtxo[]> {
   const kind = opts.apiUrlKind ?? 'electrs'
   const dustLimit = getUtxoChainSpec(opts.chain).dustLimit
+  const includeUnconfirmed = opts.includeUnconfirmed ?? false
 
   if (kind === 'electrs') {
     type ElectrsUtxo = {
@@ -75,7 +81,7 @@ export async function getUtxos(opts: GetUtxosOptions): Promise<PlainUtxo[]> {
     }
     const utxos = await fetchJson<ElectrsUtxo[]>(`${opts.apiUrl}/address/${opts.address}/utxo`)
     return utxos
-      .filter(u => u.status?.confirmed !== false && BigInt(u.value) > dustLimit)
+      .filter(u => (includeUnconfirmed || u.status?.confirmed !== false) && BigInt(u.value) > dustLimit)
       .map(u => ({ hash: u.txid, index: u.vout, value: BigInt(u.value) }))
   }
 
@@ -119,7 +125,10 @@ export async function getUtxos(opts: GetUtxosOptions): Promise<PlainUtxo[]> {
   }
 
   return blockchairUtxos
-    .filter(({ block_id, is_spendable, value }) => block_id > 0 && is_spendable !== false && BigInt(value) > dustLimit)
+    .filter(
+      ({ block_id, is_spendable, value }) =>
+        (includeUnconfirmed || block_id > 0) && is_spendable !== false && BigInt(value) > dustLimit
+    )
     .map(u => ({
       hash: u.transaction_hash,
       index: u.index,
@@ -130,10 +139,17 @@ export async function getUtxos(opts: GetUtxosOptions): Promise<PlainUtxo[]> {
 export type GetUtxoBalanceOptions = UtxoApiOptions & {
   chain: UtxoChainName
   address: string
+  /**
+   * Include unconfirmed (mempool) balance delta on Electrs backends
+   * (`chain_stats + mempool_stats`). Defaults to `false` (confirmed only on
+   * Electrs). Blockchair's `address.balance` already reflects mempool activity.
+   */
+  includeUnconfirmed?: boolean
 }
 
 /**
- * Get the confirmed balance for `address` in base units.
+ * Get the balance for `address` in base units (confirmed-only by default on
+ * Electrs unless `includeUnconfirmed` is `true`).
  */
 export async function getUtxoBalance(opts: GetUtxoBalanceOptions): Promise<bigint> {
   const kind = opts.apiUrlKind ?? 'electrs'
@@ -141,11 +157,16 @@ export async function getUtxoBalance(opts: GetUtxoBalanceOptions): Promise<bigin
   if (kind === 'electrs') {
     type ElectrsAddr = {
       chain_stats: { funded_txo_sum: number; spent_txo_sum: number }
-      mempool_stats: { funded_txo_sum: number; spent_txo_sum: number }
+      mempool_stats?: { funded_txo_sum: number; spent_txo_sum: number }
     }
     const info = await fetchJson<ElectrsAddr>(`${opts.apiUrl}/address/${opts.address}`)
-    const confirmed = info.chain_stats.funded_txo_sum - info.chain_stats.spent_txo_sum
-    return BigInt(confirmed)
+    const confirmed = BigInt(info.chain_stats.funded_txo_sum) - BigInt(info.chain_stats.spent_txo_sum)
+    if (!opts.includeUnconfirmed) {
+      return confirmed
+    }
+    const mempool = BigInt(info.mempool_stats?.funded_txo_sum ?? 0) - BigInt(info.mempool_stats?.spent_txo_sum ?? 0)
+    const total = confirmed + mempool
+    return total > 0n ? total : 0n
   }
 
   // `apiUrl` already includes the chain slug — see contract above.

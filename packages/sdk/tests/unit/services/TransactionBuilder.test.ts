@@ -130,6 +130,19 @@ describe('TransactionBuilder', () => {
       expect(buildSendKeysignPayload).not.toHaveBeenCalled()
     })
 
+    it('forwards includeUnconfirmed through prepareSendTx', async () => {
+      vi.mocked(buildSendKeysignPayload).mockResolvedValueOnce({} as never)
+
+      await builder.prepareSendTx({
+        coin: { chain: Chain.Bitcoin, address: 'bc1qsender', ticker: 'BTC', decimals: 8 },
+        receiver: 'bc1qreceiver',
+        amount: 10_000n,
+        includeUnconfirmed: true,
+      })
+
+      expect(buildSendKeysignPayload).toHaveBeenCalledWith(expect.objectContaining({ includeUnconfirmed: true }))
+    })
+
     it.each([
       ['utxo-dust-amount-requested', 'Amount 0.00001019 BTC is below the network dust threshold'],
       ['not-enough-funds', 'Failed to build transaction: insufficient balance'],
@@ -197,6 +210,20 @@ describe('TransactionBuilder', () => {
           sendMaxAmount: true,
         })
       )
+    })
+
+    it('should forward includeUnconfirmed through estimateSendFee', async () => {
+      const { getSendFeeEstimate } = await import('@vultisig/core-mpc/keysign/send/getSendFeeEstimate')
+      vi.mocked(getSendFeeEstimate).mockResolvedValue(500n)
+
+      await builder.estimateSendFee({
+        coin: { chain: Chain.Bitcoin, address: 'bc1qsender', ticker: 'BTC', decimals: 8 },
+        receiver: 'bc1qreceiver',
+        amount: 10_000n,
+        includeUnconfirmed: true,
+      })
+
+      expect(getSendFeeEstimate).toHaveBeenCalledWith(expect.objectContaining({ includeUnconfirmed: true }))
     })
 
     it('should throw VaultError when estimation fails', async () => {

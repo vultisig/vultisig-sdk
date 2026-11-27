@@ -211,3 +211,83 @@ describe('getKeysignUtxoInfo — Cardano', () => {
     await expect(getKeysignUtxoInfo({ chain: Chain.Cardano, address })).rejects.toThrow(/Negative Cardano asset/)
   })
 })
+
+describe('getKeysignUtxoInfo — UTXO chains', () => {
+  const btcAddress = 'bc1qsender'
+  const blockchairPage = {
+    data: {
+      [btcAddress]: {
+        address: { balance: 35_000, unspent_output_count: 4 },
+        utxo: [
+          {
+            block_id: 900_000,
+            transaction_hash: 'aa'.repeat(32),
+            index: 0,
+            value: 10_000,
+            value_usd: 1,
+            recipient: btcAddress,
+            script_hex: '0014',
+            is_from_coinbase: false,
+            is_spendable: true,
+          },
+          {
+            block_id: -1,
+            transaction_hash: 'bb'.repeat(32),
+            index: 1,
+            value: 25_000,
+            value_usd: 2.5,
+            recipient: btcAddress,
+            script_hex: '0014',
+            is_from_coinbase: false,
+            is_spendable: true,
+          },
+          {
+            block_id: -1,
+            transaction_hash: 'cc'.repeat(32),
+            index: 2,
+            value: 546,
+            value_usd: 0.05,
+            recipient: btcAddress,
+            script_hex: '0014',
+            is_from_coinbase: false,
+            is_spendable: true,
+          },
+          {
+            block_id: -1,
+            transaction_hash: 'dd'.repeat(32),
+            index: 3,
+            value: 12_000,
+            value_usd: 1.2,
+            recipient: btcAddress,
+            script_hex: '0014',
+            is_from_coinbase: false,
+            is_spendable: false,
+          },
+        ],
+      },
+    },
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.queryUrl.mockResolvedValue(blockchairPage)
+  })
+
+  it('excludes unconfirmed UTXOs by default', async () => {
+    const utxoInfo = await getKeysignUtxoInfo({ chain: Chain.Bitcoin, address: btcAddress })
+
+    expect(utxoInfo).toMatchObject([{ hash: 'aa'.repeat(32), amount: 10_000n, index: 0 }])
+  })
+
+  it('includes spendable non-dust unconfirmed UTXOs when includeUnconfirmed is true', async () => {
+    const utxoInfo = await getKeysignUtxoInfo(
+      { chain: Chain.Bitcoin, address: btcAddress },
+      { includeUnconfirmed: true }
+    )
+
+    expect(utxoInfo).toMatchObject([
+      { hash: 'aa'.repeat(32), amount: 10_000n, index: 0 },
+      { hash: 'bb'.repeat(32), amount: 25_000n, index: 1 },
+    ])
+  })
+})

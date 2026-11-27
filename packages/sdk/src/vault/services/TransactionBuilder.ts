@@ -84,6 +84,8 @@ export class TransactionBuilder {
    *   (Polkadot, Bittensor): the chain reaps the sender once its balance drops below
    *   the existential deposit. Only for an explicit user choice, with the reap
    *   disclosed; ignored on other chains.
+   * @param params.includeUnconfirmed - UTXO chains only: include unconfirmed (mempool)
+   *   outputs when fetching spendable UTXOs. Defaults to `false`; ignored elsewhere.
    *
    * @returns A KeysignPayload ready to be signed with the sign() method
    *
@@ -112,6 +114,7 @@ export class TransactionBuilder {
     sendMaxAmount?: boolean
     tonGasless?: boolean
     allowDeath?: boolean
+    includeUnconfirmed?: boolean
   }): Promise<KeysignPayload> {
     if (params.amount <= 0n) {
       throw new VaultError(VaultErrorCode.InvalidAmount, 'Amount must be greater than zero')
@@ -160,6 +163,7 @@ export class TransactionBuilder {
     sendMaxAmount?: boolean
     tonGasless?: boolean
     allowDeath?: boolean
+    includeUnconfirmed?: boolean
   }): Promise<bigint> {
     const params = { ...rawParams, coin: normalizeAccountCoin(rawParams.coin) }
     try {
@@ -213,6 +217,7 @@ export class TransactionBuilder {
         sendMaxAmount: params.sendMaxAmount,
         tonGasless: params.tonGasless,
         allowDeath: params.allowDeath,
+        includeUnconfirmed: params.includeUnconfirmed,
       })
     } catch (error) {
       if (error instanceof VaultError) throw error

@@ -212,4 +212,84 @@ describe('UTXO RPC filtering', () => {
     ])
     expect(captured[0]!.url).toBe(`${electrsUrl}/address/${ADDRESS}/utxo`)
   })
+
+  it('includes unconfirmed non-dust Electrs outputs when includeUnconfirmed is true', async () => {
+    const electrsUrl = 'https://blockstream.info/api'
+    mockFetch([
+      { txid: 'tx-0', vout: 0, value: 10_000, status: { confirmed: true, block_height: 900_000 } },
+      { txid: 'pending-dust', vout: 1, value: 546, status: { confirmed: false } },
+      { txid: 'pending', vout: 2, value: 15_000, status: { confirmed: false } },
+    ])
+
+    await expect(
+      getUtxos({ chain: 'Bitcoin', address: ADDRESS, apiUrl: electrsUrl, includeUnconfirmed: true })
+    ).resolves.toEqual([
+      { hash: 'tx-0', index: 0, value: 10_000n },
+      { hash: 'pending', index: 2, value: 15_000n },
+    ])
+  })
+
+  it('includes unconfirmed non-dust spendable Blockchair outputs when includeUnconfirmed is true', async () => {
+    mockFetch({
+      data: {
+        [ADDRESS]: {
+          address: { unspent_output_count: 5 },
+          utxo: [
+            { block_id: 10, transaction_hash: 'confirmed', index: 0, value: 10_000, is_spendable: true },
+            { block_id: -1, transaction_hash: 'pending-neg', index: 1, value: 20_000, is_spendable: true },
+            { block_id: 0, transaction_hash: 'pending-zero', index: 2, value: 30_000, is_spendable: true },
+            { block_id: -1, transaction_hash: 'pending-dust', index: 3, value: 546, is_spendable: true },
+            { block_id: -1, transaction_hash: 'pending-locked', index: 4, value: 40_000, is_spendable: false },
+          ],
+        },
+      },
+    })
+
+    await expect(
+      getUtxos({
+        chain: 'Bitcoin',
+        address: ADDRESS,
+        apiUrl: API_URL,
+        apiUrlKind: 'blockchair',
+        includeUnconfirmed: true,
+      })
+    ).resolves.toEqual([
+      { hash: 'confirmed', index: 0, value: 10_000n },
+      { hash: 'pending-neg', index: 1, value: 20_000n },
+      { hash: 'pending-zero', index: 2, value: 30_000n },
+    ])
+  })
+
+  it('includes Electrs mempool balance delta only when includeUnconfirmed is true', async () => {
+    const electrsUrl = 'https://blockstream.info/api'
+    mockFetch(
+      {
+        chain_stats: { funded_txo_sum: 100_000, spent_txo_sum: 40_000 },
+        mempool_stats: { funded_txo_sum: 25_000, spent_txo_sum: 0 },
+      },
+      {
+        chain_stats: { funded_txo_sum: 100_000, spent_txo_sum: 40_000 },
+        mempool_stats: { funded_txo_sum: 25_000, spent_txo_sum: 0 },
+      },
+      {
+        chain_stats: { funded_txo_sum: 50_000, spent_txo_sum: 0 },
+        mempool_stats: { funded_txo_sum: 10_000, spent_txo_sum: 50_000 },
+      },
+      {
+        chain_stats: { funded_txo_sum: 10_000, spent_txo_sum: 0 },
+        mempool_stats: { funded_txo_sum: 0, spent_txo_sum: 20_000 },
+      }
+    )
+
+    await expect(getUtxoBalance({ chain: 'Bitcoin', address: ADDRESS, apiUrl: electrsUrl })).resolves.toBe(60_000n)
+    await expect(
+      getUtxoBalance({ chain: 'Bitcoin', address: ADDRESS, apiUrl: electrsUrl, includeUnconfirmed: true })
+    ).resolves.toBe(85_000n)
+    await expect(
+      getUtxoBalance({ chain: 'Bitcoin', address: ADDRESS, apiUrl: electrsUrl, includeUnconfirmed: true })
+    ).resolves.toBe(10_000n)
+    await expect(
+      getUtxoBalance({ chain: 'Bitcoin', address: ADDRESS, apiUrl: electrsUrl, includeUnconfirmed: true })
+    ).resolves.toBe(0n)
+  })
 })

@@ -31,9 +31,20 @@ const toCanonicalQuantity = (quantity: string): string => {
   return parsed.toString()
 }
 
-export const getKeysignUtxoInfo = async ({ chain, address }: ChainAccount) => {
+export type GetKeysignUtxoInfoOptions = {
+  /**
+   * Include unconfirmed (mempool) outputs on UTXO chains.
+   * Defaults to `false`, preserving confirmed-only UTXO selection.
+   * Ignored on Cardano.
+   */
+  includeUnconfirmed?: boolean
+}
+
+export const getKeysignUtxoInfo = async ({ chain, address }: ChainAccount, options?: GetKeysignUtxoInfoOptions) => {
   if (isChainOfKind(chain, 'utxo')) {
-    const plain = await getUtxos({ chain, address })
+    const plain = options?.includeUnconfirmed
+      ? await getUtxos({ chain, address }, { includeUnconfirmed: true })
+      : await getUtxos({ chain, address })
     return plain.map(toUtxoInfo)
   }
 

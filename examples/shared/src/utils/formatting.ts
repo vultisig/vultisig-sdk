@@ -1,4 +1,4 @@
-import { type Chain, chainFeeCoin } from '@vultisig/sdk'
+import { Chain, chainFeeCoin, isChainOfKind } from '@vultisig/sdk'
 
 /**
  * Shorten an address for display
@@ -74,6 +74,14 @@ export function getChainNativeTicker(chain: string): string {
  */
 export function getChainNativeDecimals(chain: string): number {
   return chainFeeCoin[chain as Chain]?.decimals ?? 18
+}
+
+/**
+ * Returns true when `chain` is one of the SDK's canonical UTXO chains
+ * (Bitcoin, Bitcoin-Cash, Litecoin, Dogecoin, Dash, Zcash).
+ */
+export function isUtxoChain(chain: string): boolean {
+  return Object.values(Chain).includes(chain as Chain) && isChainOfKind(chain as Chain, 'utxo')
 }
 
 /**

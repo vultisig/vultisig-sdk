@@ -490,12 +490,13 @@ export class BrowserSDKAdapter extends SDKAdapterEventSubscriptionBase implement
       receiver: params.receiver,
       amount: typeof params.amount === 'string' ? BigInt(params.amount) : params.amount,
       memo: params.memo,
+      includeUnconfirmed: params.includeUnconfirmed,
     })
   }
 
   async getMaxSendAmount(
     vaultId: string,
-    params: { coin: CoinInfo; receiver: string; memo?: string }
+    params: { coin: CoinInfo; receiver: string; memo?: string; includeUnconfirmed?: boolean }
   ): Promise<MaxSendAmountResult> {
     const vault = await this.getVault(vaultId)
     const result = await vault.getMaxSendAmount({
@@ -508,6 +509,7 @@ export class BrowserSDKAdapter extends SDKAdapterEventSubscriptionBase implement
       },
       receiver: params.receiver,
       memo: params.memo,
+      includeUnconfirmed: params.includeUnconfirmed,
     })
     return {
       balance: result.balance.toString(),

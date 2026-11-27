@@ -67,6 +67,7 @@ export const send = {
     amount: 'Amount to send in human-readable units, or "max" for full balance minus fees',
     token: 'Token symbol for ERC-20/SPL tokens (omit for native token)',
     memo: 'Transaction memo (non-EVM chains only)',
+    includeUnconfirmed: 'UTXO chains only: include unconfirmed (mempool) outputs when selecting inputs',
     confirmed: 'Set true to execute. Omit or false for a dry-run preview.',
   },
 } as const

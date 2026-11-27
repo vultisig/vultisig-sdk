@@ -5,7 +5,7 @@ import { promises as fs } from 'node:fs'
 
 import { descriptions } from '@vultisig/client-shared'
 import type { FiatCurrency, VaultBase } from '@vultisig/sdk'
-import { Chain, parseKeygenQR, SEEDPHRASE_WORD_COUNTS, Vultisig } from '@vultisig/sdk'
+import { Chain, isChainOfKind, parseKeygenQR, SEEDPHRASE_WORD_COUNTS, Vultisig } from '@vultisig/sdk'
 import chalk from 'chalk'
 import { Command, CommanderError, InvalidArgumentError, program } from 'commander'
 
@@ -703,6 +703,7 @@ program
     '--allow-death',
     'Empty a Polkadot or Bittensor account with --max: the chain reaps it and destroys any remainder below the existential deposit'
   )
+  .option('--include-unconfirmed', descriptions.send.params.includeUnconfirmed)
   .option('--dry-run', 'Preview transaction without signing or broadcasting')
   .option('--confirm', 'Confirm and broadcast (required to execute non-interactively; use --dry-run to preview)')
   .option('-y, --yes', 'Alias for --confirm')
@@ -736,6 +737,7 @@ See also: balance, tx-status`
           destinationTag?: string
           gasless?: boolean
           allowDeath?: boolean
+          includeUnconfirmed?: boolean
           dryRun?: boolean
           yes?: boolean
           confirm?: boolean
@@ -760,6 +762,9 @@ See also: balance, tx-status`
             throw new Error('--allow-death empties the native account, so it requires --max and no --token')
           }
         }
+        if (options.includeUnconfirmed && !isChainOfKind(chain, 'utxo')) {
+          throw new InvalidInputError('--include-unconfirmed is only supported for UTXO chains')
+        }
         const destinationTag = options.destinationTag === undefined ? undefined : Number(options.destinationTag)
         if (
           options.destinationTag !== undefined &&
@@ -782,6 +787,7 @@ See also: balance, tx-status`
           destinationTag,
           gasless: options.gasless,
           allowDeath: options.allowDeath,
+          includeUnconfirmed: options.includeUnconfirmed,
           dryRun: options.dryRun,
           yes: options.yes || options.confirm,
           force: options.force,
